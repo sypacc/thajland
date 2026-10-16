@@ -171,8 +171,7 @@ def run(cfg: Config, *, limit: int | None = None, only_source: str | None = None
         qk = storage.query_key(d)
         d["yesterday_min"] = yesterday.get(qk)
         d["all_time_min"] = minima.get(qk, {}).get("min")
-        d["is_all_time_low"] = bool(d["all_time_min"] is None or o.price <= d["all_time_min"]) \
-            if minima else None
+        d["is_all_time_low"] = (o.price <= d["all_time_min"]) if d["all_time_min"] is not None else None
         d["stale"] = bool(getattr(o, "_stale", False))
         offer_dicts.append(d)
 
