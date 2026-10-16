@@ -81,3 +81,24 @@ def test_series_and_minima(tmp_path, monkeypatch):
     assert minima["PRG|BKK|2027-08-05|2027-08-19|google"] == {"min": 16500, "day": "2026-10-16"}
     storage.save_latest({"offers": [], "queries": [q2]})
     assert (tmp_path / "latest.js").read_text().startswith("window.THAJLAND_LATEST = ")
+
+
+def test_booking_options_parser():
+    from scanner.sources.google_flights import _parse_booking_options
+    txt = """Možnosti rezervace
+Rezervovat přes EmiratesLetecká společnost
+19 477 Kč
+Pokračovat
+Kiwi.com
+Oddělené letenky
+18 980 Kč
+Pokračovat
+Informace o ceně
+19 477 Kč je typická cena
+Typické rozpětí
+14 500 Kč
+33 500 Kč
+"""
+    sellers, insight = _parse_booking_options(txt)
+    assert sellers == [{"name": "Emirates", "price": 19477}, {"name": "Kiwi.com", "price": 18980}]
+    assert insight == {"level": "typická", "low": 14500, "high": 33500}

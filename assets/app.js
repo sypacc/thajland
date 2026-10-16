@@ -1,4 +1,4 @@
-/* Thajland dashboard – čistý JS, data z data/latest.js + data/series.js */
+/* Thajland dashboard – čistý JS; data z data/latest.js, data/series.js, data/alerts.js */
 (function () {
   "use strict";
   const LATEST = window.THAJLAND_LATEST || null;
@@ -8,114 +8,249 @@
   const el = (tag, attrs, ...kids) => {
     const n = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs || {})) {
+      if (v == null) continue;
       if (k === "class") n.className = v; else if (k === "html") n.innerHTML = v; else n.setAttribute(k, v);
     }
-    for (const k of kids.flat()) if (k != null) n.append(k.nodeType ? k : document.createTextNode(String(k)));
+    for (const k of kids.flat()) if (k != null && k !== false) n.append(k.nodeType ? k : document.createTextNode(String(k)));
     return n;
   };
   const CUR = (LATEST && LATEST.config && LATEST.config.currency) || "CZK";
-  const czk = (n) => n == null ? "–" : Math.round(n).toLocaleString("cs-CZ") + (CUR === "CZK" ? " Kč" : " " + CUR);
+  const czk = (n) => n == null || !isFinite(n) ? "–" : Math.round(n).toLocaleString("cs-CZ") + (CUR === "CZK" ? " Kč" : " " + CUR);
+  const kcs = (n) => n == null ? "–" : (n / 1000).toLocaleString("cs-CZ", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
   const dur = (m) => m == null ? "–" : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`;
+  const durShort = (m) => m == null ? "–" : (m % 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}` : `${Math.floor(m / 60)} h`);
   const dcz = (iso) => { if (!iso) return "–"; const [y, m, d] = iso.slice(0, 10).split("-"); return `${+d}. ${+m}. ${y}`; };
   const dshort = (iso) => { const [, m, d] = iso.slice(0, 10).split("-"); return `${+d}.${+m}.`; };
+  const dday = (iso) => +iso.slice(8, 10);
   const tm = (iso) => iso ? iso.slice(11, 16) : "";
-  const CITY = { PRG: "Praha", VIE: "Vídeň", BUD: "Budapešť", BRQ: "Brno", MUC: "Mnichov", BER: "Berlín",
-    BKK: "Bangkok", DMK: "Bangkok (DMK)", HKT: "Phuket", CNX: "Chiang Mai", USM: "Ko Samui", KBV: "Krabi" };
+  const WD = ["ne", "po", "út", "st", "čt", "pá", "so"];
+  const MONTHS = ["", "leden", "únor", "březen", "duben", "květen", "červen", "červenec", "srpen", "září", "říjen", "listopad", "prosinec"];
+  const wd = (iso) => WD[new Date(iso + "T00:00:00Z").getUTCDay()];
+  const CITY = { PRG: "Praha", VIE: "Vídeň", BUD: "Budapešť", BRQ: "Brno", MUC: "Mnichov", BER: "Berlín", BKK: "Bangkok", DMK: "Bangkok (DMK)", HKT: "Phuket", CNX: "Chiang Mai", USM: "Ko Samui", KBV: "Krabi",
+    IST: "Istanbul", DXB: "Dubaj", DOH: "Dauhá", AUH: "Abú Dhabí", ZRH: "Curych", HEL: "Helsinky", FRA: "Frankfurt", MUC2: "Mnichov", WAW: "Varšava", CDG: "Paříž", AMS: "Amsterdam", LHR: "Londýn", SIN: "Singapur", TPE: "Tchaj-pej", HKG: "Hongkong", PEK: "Peking", PVG: "Šanghaj", CAN: "Kanton", KUL: "Kuala Lumpur", MCT: "Maskat", CAI: "Káhira", ADD: "Addis Abeba", BAH: "Bahrajn", KWI: "Kuvajt", RUH: "Rijád", JED: "Džidda", TLV: "Tel Aviv", BOM: "Bombaj", DEL: "Dillí", CMB: "Kolombo", ALA: "Almaty", TAS: "Taškent", BEG: "Bělehrad", OTP: "Bukurešť", SAW: "Istanbul (SAW)", CPH: "Kodaň", ARN: "Stockholm", OSL: "Oslo", BRU: "Brusel", MXP: "Milán", FCO: "Řím", VIE2: "Vídeň" };
   const city = (c) => CITY[c] || c;
-  const LINK_NAMES = { google: "Google Flights", kiwi: "Kiwi.com", skyscanner: "Skyscanner", kayak: "Kayak", azair: "Azair", pelikan: "Pelikán (ručně)", letuska: "Letuška (ručně)" };
+  const LINK_NAMES = { google: "Google Flights", kiwi: "Kiwi.com", skyscanner: "Skyscanner", kayak: "Kayak", azair: "Azair", pelikan: "Pelikán", letuska: "Letuška" };
   const SERIES_VARS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6"];
   const cssVar = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const median = (arr) => { const a = arr.filter((x) => x != null).sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : null; };
+  const ago = (iso) => { const h = (Date.now() - new Date(iso).getTime()) / 36e5; return h < 1 ? "před chvílí" : h < 48 ? `před ${Math.round(h)} h` : `před ${Math.round(h / 24)} dny`; };
 
   // ---------- no data ----------
   if (!LATEST || !LATEST.offers) {
-    $("#status").innerHTML = '<span class="warn">Zatím nejsou žádná data.</span> Spusť workflow „Sken letenek do Thajska“ v záložce Actions (nebo počkej na ranní běh).';
+    $("#status").innerHTML = '<span class="warn">Zatím nejsou žádná data.</span> Spusť workflow „Sken letenek do Thajska“ v záložce Actions nebo počkej na ranní běh.';
+    $("#verdict").append(el("div", { class: "main info" }, el("div", { class: "label" }, "Stav"), el("div", { class: "headline" }, "Čekáme na první sken"), el("div", { class: "sub" }, "Po prvním běhu se tu objeví verdikt, nejlepší nabídky a kalendář cen.")));
     return;
   }
 
-  const offers = LATEST.offers.map((o, i) => ({ ...o, _i: i, _month: +o.depart_date.slice(5, 7) }));
-  const travelers = LATEST.config.travelers || 1;
+  const cfg = LATEST.config;
+  const travelers = cfg.travelers || 1;
+  const offers = LATEST.offers.map((o, i) => ({ ...o, _i: i, _month: +o.depart_date.slice(5, 7), _rk: `${o.origin}→${o.destination}` }));
+  const fresh = offers.filter((o) => !o.stale);
   const routeOrder = [];
-  for (const o of LATEST.config.origins) for (const d of LATEST.config.destinations) routeOrder.push(`${o}→${d}`);
+  for (const o of cfg.origins) for (const d of cfg.destinations) routeOrder.push(`${o}→${d}`);
   const routeColor = (r) => { let i = routeOrder.indexOf(r); if (i < 0) { routeOrder.push(r); i = routeOrder.length - 1; } return cssVar(SERIES_VARS[i % SERIES_VARS.length]); };
+  const routeName = (r) => { const [a, b] = r.split("→"); return `${city(a)} → ${city(b)}`; };
+  const days = SERIES.days || [];
+  const sortBy = (arr, key, dir = 1) => [...arr].sort((a, b) => { const x = a[key] ?? Infinity, y = b[key] ?? Infinity; return (x < y ? -1 : x > y ? 1 : 0) * dir || a.price - b.price; });
+
+  // ---------- pokrytí termínů ----------
+  const queries = LATEST.queries || [];
+  const byMonth = {};
+  for (const q of queries) {
+    const m = +q.depart_date.slice(5, 7);
+    const b = (byMonth[m] ||= { total: 0, ok: 0, dates: new Set(), okDates: new Set() });
+    b.total++; b.dates.add(q.depart_date);
+    if (q.status === "ok" && q.count) { b.ok++; b.okDates.add(q.depart_date); }
+  }
+  const coverage = Object.entries(byMonth).map(([m, b]) => ({ month: +m, name: MONTHS[+m], dates: b.dates.size, okDates: b.okDates.size, total: b.total, ok: b.ok }));
 
   // ---------- status ----------
   {
     const s = LATEST.stats;
-    const parts = [`Poslední sken: <strong>${dcz(LATEST.generated_at)} ${tm(LATEST.generated_at)} UTC</strong>`,
-      `dotazů OK ${s.queries_ok}/${s.queries_total}`, `nabídek ${s.offers}`];
-    if (s.queries_stale) parts.push(`<span class="warn">${s.queries_stale} dotazů převzato ze staršího běhu</span>`);
+    const parts = [`Poslední sken <strong>${dcz(LATEST.generated_at)} ${tm(LATEST.generated_at)} UTC</strong> (${ago(LATEST.generated_at)})`,
+      `<span class="${s.queries_ok ? "ok" : "bad"}">${s.queries_ok} termínů s nabídkou</span> z ${s.queries_total} dotazů`,
+      `${s.offers} nabídek`, `historie ${days.length} ${days.length === 1 ? "den" : days.length < 5 ? "dny" : "dní"}`];
+    if (s.queries_stale) parts.push(`<span class="warn">${s.queries_stale} termínů převzato ze staršího běhu</span>`);
     if (s.google_disabled) parts.push('<span class="bad">Google Flights blokoval dotazy – data jsou neúplná</span>');
     if (s.queries_error) parts.push(`<span class="warn">chyb: ${s.queries_error}</span>`);
     $("#status").innerHTML = parts.map((p) => `<span>${p}</span>`).join("");
   }
 
-  // ---------- filters ----------
-  const F = { origin: "", dest: "", stops: "", nights: "", month: "", maxPrice: "", source: "", sort: "score", stale: "1" };
-  const uniq = (k) => [...new Set(offers.map((o) => o[k]))].sort();
-  const sel = (key, label, opts) => {
-    const s = el("select", { id: "f-" + key });
-    for (const [v, t] of opts) s.append(el("option", { value: v }, t));
-    s.value = F[key];
-    s.addEventListener("change", () => { F[key] = s.value; render(); });
-    return el("label", null, label, s);
-  };
-  const fl = $("#filters");
-  fl.append(
-    sel("origin", "Odkud", [["", "vše"], ...uniq("origin").map((v) => [v, `${city(v)} (${v})`])]),
-    sel("dest", "Kam", [["", "vše"], ...uniq("destination").map((v) => [v, `${city(v)} (${v})`])]),
-    sel("stops", "Max. přestupů", [["", "libovolně"], ["0", "přímý"], ["1", "max 1"], ["2", "max 2"]]),
-    sel("nights", "Délka (dní)", [["", "vše"], ...uniq("nights").map((v) => [String(v), String(v)])]),
-    sel("month", "Měsíc odletu", [["", "srpen + září"], ["8", "srpen"], ["9", "září"]]),
-    sel("source", "Zdroj", [["", "vše"], ...uniq("source").map((v) => [v, v])]),
-    sel("sort", "Řadit podle", [["score", "skóre (cena/výkon)"], ["price", "ceny"], ["depart_date", "data odletu"], ["duration_min", "délky cesty"]]),
-    sel("stale", "Starší data", [["1", "zobrazit"], ["0", "skrýt"]]),
-  );
-  const mp = el("input", { type: "number", id: "f-maxPrice", placeholder: "např. 20000", min: "0", step: "500" });
-  mp.addEventListener("input", () => { F.maxPrice = mp.value; render(); });
-  fl.append(el("label", null, `Max. cena/os (${CUR})`, mp));
+  // ---------- verdikt ----------
+  const routeHistory = (r) => days.map((d) => (d.routes[r.replace("→", "-")] || {}).min ?? null);
+  function routeVerdict(r) {
+    const hist = routeHistory(r).filter((x) => x != null);
+    const cur = Math.min(...fresh.filter((o) => o._rk === r).map((o) => o.price), Infinity);
+    if (!isFinite(cur)) return { state: "none", label: "bez nabídek", cur: null, days: hist.length };
+    const med = median(hist), allMin = hist.length ? Math.min(...hist) : cur;
+    if (hist.length < 5) return { state: "info", label: `sbíráme data (${hist.length}/5 dní)`, cur, days: hist.length, med };
+    if (cur <= allMin && cur <= med * 0.92) return { state: "good", label: `dobrá chvíle na nákup · ${Math.round((1 - cur / med) * 100)} % pod obvyklou cenou`, cur, days: hist.length, med };
+    if (cur <= med * 1.03) return { state: "fair", label: "férová cena, sledujeme dál", cur, days: hist.length, med };
+    return { state: "warn", label: `počkat · ${Math.round((cur / med - 1) * 100)} % nad obvyklou cenou`, cur, days: hist.length, med };
+  }
+  function renderVerdict() {
+    const v = $("#verdict"); v.innerHTML = "";
+    const best = sortBy(fresh.filter((o) => o.score != null), "score")[0];
+    const cheapest = sortBy(fresh, "price")[0];
+    const rv = routeOrder.map((r) => ({ r, ...routeVerdict(r) }));
+    const states = rv.map((x) => x.state);
+    let cls = "info", headline, sub;
+    if (!best) {
+      headline = "Dnes žádné nabídky"; sub = "Buď ještě není otevřený prodej, nebo sken selhal. Podrobnosti ve stavu skenu dole.";
+    } else if (states.includes("good")) {
+      cls = "good"; const g = rv.filter((x) => x.state === "good").map((x) => routeName(x.r)).join(", ");
+      headline = `Dobrá chvíle na nákup: ${g}`; sub = "Cena je na historickém minimu a výrazně pod obvyklou úrovní. Ověř přes odkaz u nabídky a kupuj.";
+    } else if (states.every((s) => s === "info" || s === "none")) {
+      cls = "info"; headline = `Zatím sbíráme data · nejlepší nabídka ${czk(best.price)}/os`;
+      sub = `Verdikt „kupovat / počkat“ dává smysl až po ~5 denních měřeních (máme ${days.length}). Do té doby ber ceny jako výchozí úroveň.`;
+    } else if (states.includes("warn") && !states.includes("fair")) {
+      cls = "warn"; headline = "Spíš počkat – ceny jsou nad obvyklou úrovní"; sub = "Historická minima byla níž. Hlášení přijde, jakmile cena spadne.";
+    } else {
+      cls = "info"; headline = `Férové ceny · nejlepší nabídka ${czk(best.price)}/os`; sub = "Nic abnormálně levného. Sledujeme dál, hlášení přijde při poklesu.";
+    }
+    const main = el("div", { class: "main " + cls },
+      el("div", { class: "label" }, "Verdikt k " + dcz(LATEST.day)),
+      el("div", { class: "headline" }, headline), el("div", { class: "sub" }, sub));
+    if (best) main.append(el("div", { class: "sub" }, el("strong", null, "Nejlepší poměr: "), `${czk(best.price)}/os · ${routeName(best._rk)} · ${dshort(best.depart_date)}–${dshort(best.return_date)} · ${best.airlines.join(", ")} · ${best.stops === 0 ? "přímý" : best.stops + "× přestup"} · tam ${durShort(best.duration_min)}`));
+    if (cheapest && best && cheapest.id !== best.id) main.append(el("div", { class: "sub" }, el("strong", null, "Nejlevnější: "), `${czk(cheapest.price)}/os · ${routeName(cheapest._rk)} · ${dshort(cheapest.depart_date)} · ${cheapest.airlines.join(", ")} · tam ${durShort(cheapest.duration_min)}`));
+    v.append(main);
+    const routes = el("div", { class: "routes" });
+    rv.forEach((x) => routes.append(el("div", { class: "rv " + x.state },
+      el("span", { class: "dot", style: `--c:${routeColor(x.r)}` }),
+      el("div", null, el("span", { class: "name" }, routeName(x.r)), " ", el("span", { class: "price" }, x.cur != null ? czk(x.cur) : "–")),
+      el("div", { class: "state" }, x.label + (x.med && x.days >= 5 ? ` · obvykle ${czk(x.med)}` : "")))));
+    v.append(routes);
+    const kp = el("div", { class: "routes" });
+    const tile = (label, value, hint) => kp.append(el("div", { class: "kpi" }, el("div", { class: "label" }, label), el("div", { class: "value" }, value), el("div", { class: "hint" }, hint || "")));
+    if (best) tile(`Pro ${travelers} os.`, czk(best.price * travelers), "nejlepší poměr × počet cestujících");
+    const cov = coverage.map((c) => `${c.name} ${c.okDates}/${c.dates}`).join(" · ");
+    tile("Pokryté termíny", `${coverage.reduce((a, c) => a + c.okDates, 0)}/${coverage.reduce((a, c) => a + c.dates, 0)}`, cov || "–");
+    if (days.length >= 2) {
+      const minOf = (d) => Math.min(...Object.values(d.routes).map((r) => r.min).filter((x) => x != null));
+      const a = minOf(days[days.length - 2]), b = minOf(days[days.length - 1]);
+      if (isFinite(a) && isFinite(b)) tile("Minimum vs. minule", (b - a > 0 ? "+" : "") + czk(b - a), `${czk(a)} → ${czk(b)}`);
+    }
+    v.append(kp);
+  }
 
-  const filtered = () => offers.filter((o) =>
-    (!F.origin || o.origin === F.origin) && (!F.dest || o.destination === F.dest) &&
-    (F.stops === "" || o.stops <= +F.stops) && (!F.nights || String(o.nights) === F.nights) &&
-    (!F.month || o._month === +F.month) && (!F.maxPrice || o.price <= +F.maxPrice) &&
-    (!F.source || o.source === F.source) && (F.stale === "1" || !o.stale));
-  const sortBy = (arr, key, dir = 1) => [...arr].sort((a, b) => {
-    const x = a[key] ?? Infinity, y = b[key] ?? Infinity;
-    return (x < y ? -1 : x > y ? 1 : 0) * dir || a.price - b.price;
-  });
+  // ---------- postřehy ----------
+  function insights() {
+    const out = [];
+    if (!fresh.length) return out;
+    const minByKey = (keyFn) => { const m = {}; for (const o of fresh) { const k = keyFn(o); m[k] = Math.min(m[k] ?? Infinity, o.price); } return m; };
+    // odkud: párové srovnání na stejných (cíl, odlet, délka)
+    const origins = cfg.origins;
+    if (origins.length >= 2) {
+      const m = minByKey((o) => `${o.origin}|${o.destination}|${o.depart_date}|${o.nights}`);
+      const diffs = [];
+      for (const k of Object.keys(m)) if (k.startsWith(origins[0] + "|")) { const k2 = origins[1] + k.slice(origins[0].length); if (m[k2] != null && isFinite(m[k2])) diffs.push(m[k] - m[k2]); }
+      if (diffs.length >= 3) { const d = median(diffs); out.push(d > 500 ? `Z ${city(origins[1])} vychází stejný termín typicky o <strong>${czk(d)}</strong> levněji než z ${city(origins[0])} (${diffs.length} srovnání). K ceně připočti dopravu.` : d < -500 ? `Z ${city(origins[0])} je to typicky o <strong>${czk(-d)}</strong> levnější než z ${city(origins[1])}.` : `${city(origins[0])} a ${city(origins[1])} vycházejí cenově podobně (rozdíl do 500 Kč).`); }
+    }
+    // kam
+    if (cfg.destinations.length >= 2) {
+      const [a, b] = cfg.destinations;
+      const m = minByKey((o) => `${o.destination}|${o.origin}|${o.depart_date}|${o.nights}`);
+      const diffs = [];
+      for (const k of Object.keys(m)) if (k.startsWith(a + "|")) { const k2 = b + k.slice(a.length); if (isFinite(m[k2] ?? NaN)) diffs.push(m[k2] - m[k]); }
+      if (diffs.length >= 3) { const d = median(diffs); out.push(Math.abs(d) < 500 ? `${city(a)} i ${city(b)} stojí prakticky stejně.` : d > 0 ? `${city(b)} je oproti ${city(a)} dražší typicky o <strong>${czk(d)}</strong>; zvaž přílet do Bangkoku a vnitrostátní let.` : `${city(b)} vychází typicky o <strong>${czk(-d)}</strong> levněji než ${city(a)}.`); }
+    }
+    // nejlevnější týden odletu
+    const byDate = minByKey((o) => o.depart_date);
+    const dates = Object.keys(byDate).sort();
+    if (dates.length >= 4) {
+      const weeks = {};
+      for (const d of dates) { const w = `${d.slice(5, 7)}-${Math.min(4, Math.ceil(dday(d) / 7))}`; (weeks[w] ||= []).push(byDate[d]); }
+      const ranked = Object.entries(weeks).map(([w, v]) => [w, median(v)]).sort((x, y) => x[1] - y[1]);
+      const [w, p] = ranked[0]; const [mm, wk] = w.split("-");
+      const worst = ranked[ranked.length - 1];
+      out.push(`Nejlevnější odlety: <strong>${wk}. týden ${MONTHS[+mm].replace("srpen", "srpna").replace("září", "září")}</strong> (medián ${czk(p)}); nejdražší ${worst[0].split("-")[1]}. týden ${MONTHS[+worst[0].split("-")[0]].replace("srpen", "srpna")} (${czk(worst[1])}).`);
+    }
+    // délka pobytu
+    if (cfg.trip_lengths.length >= 2) {
+      const m = minByKey((o) => `${o.nights}|${o.origin}|${o.destination}|${o.depart_date}`);
+      const per = {}; for (const [k, v] of Object.entries(m)) { const n = k.split("|")[0]; (per[n] ||= []).push(v); }
+      const meds = Object.entries(per).map(([n, v]) => [n, median(v)]).sort((x, y) => x[1] - y[1]);
+      if (meds.length >= 2 && meds[meds.length - 1][1] - meds[0][1] > 400) out.push(`Délka pobytu <strong>${meds[0][0]} dní</strong> vychází nejlevněji (medián ${czk(meds[0][1])}), ${meds[meds.length - 1][0]} dní ${czk(meds[meds.length - 1][1])}.`);
+      else if (meds.length >= 2) out.push("Délka pobytu 13/14/15 dní cenu prakticky nemění, vyber podle dovolené.");
+    }
+    // přímé lety / přestupy
+    const direct = fresh.filter((o) => o.stops === 0);
+    if (direct.length) out.push(`Přímý let existuje od <strong>${czk(Math.min(...direct.map((o) => o.price)))}</strong> (${[...new Set(direct.map((o) => o.airlines.join("/")))].join(", ")}).`);
+    else out.push("Přímý let z Česka ani Vídně v nabídce není, počítej s jedním přestupem (typicky Istanbul, Dubaj nebo Dauhá).");
+    // aerolinky s nejlepším skóre
+    const top = sortBy(fresh.filter((o) => o.score != null), "score").slice(0, 10);
+    if (top.length >= 5) { const c = {}; for (const o of top) for (const a of o.airlines) c[a] = (c[a] || 0) + 1; const [a, n] = Object.entries(c).sort((x, y) => y[1] - x[1])[0]; out.push(`V top 10 podle poměru cena/výkon je nejčastěji <strong>${a}</strong> (${n}×).`); }
+    // trend
+    if (days.length >= 3) {
+      const minOf = (d) => Math.min(...Object.values(d.routes).map((r) => r.min).filter((x) => x != null));
+      const first = minOf(days[Math.max(0, days.length - 8)]), last = minOf(days[days.length - 1]);
+      if (isFinite(first) && isFinite(last)) { const pct = (last - first) / first * 100; out.push(Math.abs(pct) < 3 ? `Za posledních ${Math.min(7, days.length - 1)} dní je nejnižší cena stabilní (${czk(last)}).` : pct < 0 ? `Nejnižší cena za posledních ${Math.min(7, days.length - 1)} dní <strong>klesla o ${Math.abs(pct).toFixed(0)} %</strong> (${czk(first)} → ${czk(last)}).` : `Nejnižší cena za posledních ${Math.min(7, days.length - 1)} dní <strong>vzrostla o ${pct.toFixed(0)} %</strong> (${czk(first)} → ${czk(last)}).`); }
+    }
+    // pokrytí
+    const sep = coverage.find((c) => c.month === 9);
+    if (sep && sep.okDates === 0) out.push("Září 2027 zatím nemá žádné nabídky: aerolinky otevírají prodej ~11 měsíců dopředu, termíny se doplní samy.");
+    else if (sep && sep.okDates < sep.dates) out.push(`Září je zatím pokryté jen částečně (${sep.okDates} z ${sep.dates} termínů), zbytek se doplní, jak aerolinky otevřou prodej.`);
+    return out.slice(0, 7);
+  }
+  function renderInsights() {
+    const box = $("#insights"); box.innerHTML = "";
+    const items = insights();
+    box.append(el("div", { class: "panel-head" }, el("h2", null, "Postřehy z dat"), el("span", { class: "muted small" }, "spočítané z posledního skenu a historie")));
+    if (!items.length) { box.append(el("div", { class: "empty" }, "Postřehy se objeví, jakmile budou nabídky.")); return; }
+    box.append(el("ul", null, items.map((t) => el("li", { html: t }))));
+  }
 
-  // ---------- badges ----------
+  // ---------- společné prvky nabídky ----------
   function badges(o) {
     const b = [];
-    b.push(el("span", { class: "badge " + (o.stops === 0 ? "good" : o.stops >= 2 ? "warn" : "") },
-      o.stops === 0 ? "přímý let" : o.stops === 1 ? "1 přestup" : `${o.stops} přestupy`));
+    b.push(el("span", { class: "badge " + (o.stops === 0 ? "good" : o.stops >= 2 ? "warn" : "") }, o.stops === 0 ? "přímý let" : o.stops === 1 ? "1 přestup" : `${o.stops} přestupy`));
     if (o.is_all_time_low) b.push(el("span", { class: "badge good" }, "nejnižší cena dosud"));
-    if (o.yesterday_min != null && o.price < o.yesterday_min) b.push(el("span", { class: "badge good" }, `↓ ${czk(o.yesterday_min - o.price)} od včera`));
-    if (o.yesterday_min != null && o.price > o.yesterday_min) b.push(el("span", { class: "badge bad" }, `↑ ${czk(o.price - o.yesterday_min)} od včera`));
+    if (o.yesterday_min != null && o.price < o.yesterday_min) b.push(el("span", { class: "badge good" }, `↓ ${czk(o.yesterday_min - o.price)} od minula`));
+    if (o.yesterday_min != null && o.price > o.yesterday_min) b.push(el("span", { class: "badge bad" }, `↑ ${czk(o.price - o.yesterday_min)} od minula`));
     const longLay = (o.layovers || []).find((l) => l.minutes > 300);
-    if (longLay) b.push(el("span", { class: "badge warn" }, `dlouhý přestup ${city(longLay.airport)} ${dur(longLay.minutes)}`));
+    if (longLay) b.push(el("span", { class: "badge warn" }, `dlouhý přestup ${city(longLay.airport)} ${durShort(longLay.minutes)}`));
     const shortLay = (o.layovers || []).find((l) => l.minutes > 0 && l.minutes < 60);
-    if (shortLay) b.push(el("span", { class: "badge bad" }, `krátký přestup ${dur(shortLay.minutes)}`));
+    if (shortLay) b.push(el("span", { class: "badge bad" }, `krátký přestup ${durShort(shortLay.minutes)}`));
+    if (o.duration_min && o.duration_min <= 840) b.push(el("span", { class: "badge good" }, "rychlá cesta"));
+    if (o.price_insight && o.price_insight.level) {
+      const pi = o.price_insight; const lvl = pi.level;
+      b.push(el("span", { class: "badge " + (lvl === "nízká" ? "good" : lvl === "vysoká" ? "bad" : ""), title: "Odhad Google Flights: jak si tato cena stojí proti obvyklému rozpětí pro tento termín" },
+        `Google: ${lvl} cena${pi.low && pi.high ? ` (obvykle ${kcs(pi.low)}–${kcs(pi.high)} tis.)` : ""}`));
+    }
     if (o.stale) b.push(el("span", { class: "badge warn" }, `starší data (${dshort(o.fetched_at || LATEST.generated_at)})`));
-    if (o.source === "azair") b.push(el("span", { class: "badge" }, "Azair (experimentální)"));
     return el("div", { class: "badges" }, b);
   }
-  const linkRow = (o) => el("div", { class: "links" }, Object.entries(o.links || {}).map(([k, u]) =>
-    el("a", { href: u, target: "_blank", rel: "noopener" }, LINK_NAMES[k] || k)));
-  const legList = (o) => {
-    if (!o.legs || !o.legs.length) return o.note ? el("p", { class: "legs" }, o.note) : null;
-    const items = [];
+  function timeline(o) {
+    if (!o.legs || !o.legs.length) return null;
+    const total = o.duration_min || o.legs.reduce((a, l) => a + l.duration_min, 0);
+    const bar = el("div", { class: "tl", title: `cesta tam ${dur(total)}` });
     o.legs.forEach((l, i) => {
-      items.push(el("li", null, `${l.from_airport} ${tm(l.departure)} → ${l.to_airport} ${tm(l.arrival)} (${dur(l.duration_min)}${l.plane ? ", " + l.plane : ""})`));
-      if (o.layovers && o.layovers[i]) items.push(el("li", { class: "muted" }, `přestup ${city(o.layovers[i].airport)}: ${dur(o.layovers[i].minutes)}`));
+      bar.append(el("span", { class: "leg", style: `flex:${l.duration_min}`, title: `${l.from_airport}→${l.to_airport} ${dur(l.duration_min)}` }));
+      const lay = o.layovers && o.layovers[i];
+      if (lay) bar.append(el("span", { class: "lay" + (lay.minutes > 300 ? " long" : lay.minutes < 60 ? " short" : ""), style: `flex:${Math.max(lay.minutes, 20)}`, title: `přestup ${city(lay.airport)} ${dur(lay.minutes)}` }));
     });
-    return el("ul", { class: "legs" }, items);
+    const first = o.legs[0], last = o.legs[o.legs.length - 1];
+    const mid = (o.layovers || []).map((l) => `${city(l.airport)} ${durShort(l.minutes)}`).join(" · ");
+    const labels = el("div", { class: "tl-labels" },
+      el("span", null, el("b", null, tm(first.departure)), ` ${first.from_airport}`),
+      el("span", { class: "muted" }, mid || "přímo", ` · celkem ${durShort(total)}`),
+      el("span", null, el("b", null, tm(last.arrival)), ` ${last.to_airport}`, last.arrival.slice(0, 10) !== first.departure.slice(0, 10) ? " +1" : ""));
+    return el("div", null, bar, labels);
+  }
+  const why = (o) => {
+    const b = o.score_breakdown || {}; const parts = [];
+    if (b.stops < 0) parts.push("bonus za přímý let"); if (b.stops > 0) parts.push(`+${czk(b.stops)} za přestupy navíc`);
+    if (b.duration > 0) parts.push(`+${czk(b.duration)} za čas nad 14 h`); if (b.layover > 0) parts.push(`+${czk(b.layover)} za přestupy`);
+    if (b.airline < 0) parts.push(`−${czk(-b.airline)} bonus aerolinka`); if (b.airline > 0) parts.push(`+${czk(b.airline)} malus aerolinka`);
+    return `Skóre ${czk(o.score)}: cena ${czk(o.price)}${parts.length ? " · " + parts.join(" · ") : " · bez penalizací"}`;
   };
-  const breakdown = (o) => {
-    const names = { price: "cena", duration: "čas navíc", stops: "přestupy", layover: "přestupy (délka)", airline: "aerolinka" };
-    return Object.entries(o.score_breakdown || {}).map(([k, v]) => `${names[k] || k} ${v > 0 && k !== "price" ? "+" : ""}${Math.round(v).toLocaleString("cs-CZ")}`).join(" · ");
+  const linkRow = (o, primary = true) => el("div", { class: "links" }, Object.entries(o.links || {}).map(([k, u], i) =>
+    el("a", { href: u, target: "_blank", rel: "noopener", class: primary && i === 0 ? "primary" : null }, (k === "google" ? "Koupit přes " : "") + (LINK_NAMES[k] || k))));
+  const sellersRow = (o) => {
+    if (!o.sellers || !o.sellers.length) return null;
+    const items = [...o.sellers].sort((a, b) => a.price - b.price).slice(0, 8).map((x, i) => el("span", null, i ? " · " : "", i === 0 ? el("strong", null, `${x.name} ${czk(x.price)}`) : `${x.name} ${czk(x.price)}`));
+    return el("div", { class: "sellers" }, "Kde koupit: ", ...items);
   };
-
   const sparkline = (vals, w = 120, h = 28) => {
     const v = vals.filter((x) => x != null);
     if (v.length < 2) return el("span", { class: "muted small" }, v.length ? "1 měření" : "–");
@@ -128,35 +263,97 @@
     svg.innerHTML = `<title>${v.map((x) => czk(x)).join(", ")}</title><path d="${d}"/><circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.5"/>`;
     return svg;
   };
-  const queryHistory = (o) => (SERIES.days || []).map((d) => {
-    const r = (d.queries || []).find((q) => q[0] === o.origin && q[1] === o.destination && q[2] === o.depart_date && q[3] === o.return_date && q[4] === o.source);
-    return r ? r[5] : null;
-  });
-  const sellersRow = (o) => {
-    if (!o.sellers || !o.sellers.length) return o.sellers_error ? el("div", { class: "sellers muted" }, "Prodejci: nepodařilo se načíst (" + o.sellers_error + ")") : null;
-    const items = [...o.sellers].sort((a, b) => a.price - b.price).slice(0, 8).map((x, i) => el("span", null, i ? " · " : "", i === 0 ? el("strong", null, `${x.name} ${czk(x.price)}`) : `${x.name} ${czk(x.price)}`));
-    return el("div", { class: "sellers" }, "Kde koupit (Google Flights): ", ...items);
-  };
+  const queryHistory = (o) => days.map((d) => { const r = (d.queries || []).find((q) => q[0] === o.origin && q[1] === o.destination && q[2] === o.depart_date && q[3] === o.return_date && q[4] === o.source); return r ? r[5] : null; });
+  const legList = (o) => !o.legs || !o.legs.length ? (o.note ? el("p", { class: "legs" }, o.note) : null) : el("ul", { class: "legs" }, o.legs.flatMap((l, i) => [
+    el("li", null, `${city(l.from_airport)} ${tm(l.departure)} → ${city(l.to_airport)} ${tm(l.arrival)} (${dur(l.duration_min)}${l.plane ? ", " + l.plane : ""})`),
+    o.layovers && o.layovers[i] ? el("li", { class: "muted" }, `přestup ${city(o.layovers[i].airport)}: ${dur(o.layovers[i].minutes)}`) : null]));
 
-  // ---------- alerts ----------
-  function renderAlerts() {
-    const box = $("#alerts"); box.innerHTML = "";
-    if (!ALERTS.length) { box.append(el("div", { class: "empty" }, "Zatím žádné hlášení. Dealy se začnou objevovat, až bude k dispozici pár dní historie, nebo když cena spadne pod cílovou hranici.")); return; }
-    const today = LATEST.day;
-    ALERTS.slice(0, 15).forEach((a) => box.append(el("div", { class: "alert " + (a.severity || "") },
-      el("div", { class: "price" }, czk(a.price), el("span", { class: "muted small" }, " /os")),
-      el("div", { class: "when" }, (a.day === today ? "dnes" : dcz(a.day)) + " · " + (a.kind_label || a.kind)),
-      el("div", { class: "body" },
-        el("div", { class: "title" }, `${city(a.origin)} → ${city(a.destination)} · ${dcz(a.depart_date)} – ${dcz(a.return_date)} (${a.nights} dní) · ${(a.airlines || []).join(", ") || "–"} · ${a.stops === 0 ? "přímý" : a.stops === 1 ? "1 přestup" : a.stops + " přestupy"}`),
-        el("div", { class: "reason" }, a.reason),
-        el("div", { class: "links" }, Object.entries(a.links || {}).slice(0, 5).map(([k, u]) => el("a", { href: u, target: "_blank", rel: "noopener" }, LINK_NAMES[k] || k)))))));
-    if (ALERTS.length > 15) box.append(el("div", { class: "muted small" }, `… a dalších ${ALERTS.length - 15} starších v data/alerts.json`));
+  function card(o, i, label) {
+    return el("div", { class: "card" + (i === 0 ? " rank1" : "") },
+      el("div", { class: "head" },
+        el("div", null, el("div", { class: "price" }, czk(o.price), el("span", { class: "muted small" }, " /os")), el("div", { class: "total" }, `${czk(o.price * travelers)} pro ${travelers} · skóre ${czk(o.score)}`)),
+        el("div", { class: "rank" }, label || `#${i + 1}`)),
+      el("div", { class: "route" }, `${routeName(o._rk)}`, el("span", { class: "muted" }, ` · ${o.airlines.join(", ") || "–"}`)),
+      el("div", { class: "dates" }, `${wd(o.depart_date)} ${dcz(o.depart_date)} → ${wd(o.return_date)} ${dcz(o.return_date)} · ${o.nights} dní`),
+      timeline(o), badges(o), sellersRow(o),
+      el("div", { class: "why" }, why(o), days.length >= 2 ? [" · vývoj termínu: ", sparkline(queryHistory(o), 80, 20)] : null),
+      linkRow(o));
   }
 
-  // ---------- price overview per route ----------
+  // ---------- dealy (taby) ----------
+  let dealTab = "best";
+  function renderDeals() {
+    const tabs = $("#dealTabs"); tabs.innerHTML = "";
+    const pool = fresh.filter((o) => o.score != null);
+    const defs = [["best", "Nejlepší poměr"], ["cheap", "Nejlevnější"], ["fast", "Nejrychlejší"], ["direct", "Přímé / 1 přestup"]];
+    for (const [k, t] of defs) { const b = el("button", { class: "tab", role: "tab", "aria-selected": String(dealTab === k) }, t); b.addEventListener("click", () => { dealTab = k; renderDeals(); }); tabs.append(b); }
+    const uniqByItin = (arr) => { const seen = new Set(); return arr.filter((o) => { const k = `${o.depart_date}|${o.price}|${o.airlines.join()}|${o.route}`; if (seen.has(k)) return false; seen.add(k); return true; }); };
+    let list, hint;
+    if (dealTab === "cheap") { list = sortBy(pool, "price"); hint = "Čistě podle ceny za osobu, bez ohledu na délku cesty a přestupy."; }
+    else if (dealTab === "fast") { list = sortBy(pool, "duration_min"); hint = "Nejkratší cesta tam. Cena je druhotná."; }
+    else if (dealTab === "direct") { list = sortBy(pool.filter((o) => o.stops <= 1), "score"); hint = "Jen přímé lety a lety s jedním přestupem, řazené podle skóre."; }
+    else { list = sortBy(pool, "score"); hint = "Skóre = cena + penalizace za dlouhou cestu, přestupy a horší aerolinky. Čím nižší, tím lepší."; }
+    $("#dealsHint").textContent = hint;
+    const t = $("#top"); t.innerHTML = "";
+    const top = uniqByItin(list).slice(0, 6);
+    if (!top.length) { t.append(el("div", { class: "empty" }, "Žádné nabídky v posledním skenu.")); return; }
+    top.forEach((o, i) => t.append(card(o, i)));
+  }
+
+  // ---------- kalendář cen ----------
+  let selectedCell = null;
+  function renderCalendar() {
+    const box = $("#calendar"); box.innerHTML = "";
+    const planDates = [...new Set(queries.map((q) => q.depart_date))].sort();
+    if (!planDates.length) { box.append(el("div", { class: "empty" }, "Žádné termíny.")); return; }
+    const cellMin = {}; const cellStale = {}; const cellStatus = {};
+    for (const q of queries) { const k = `${q.origin}→${q.destination}|${q.depart_date}`; cellStatus[k] = cellStatus[k] === "ok" ? "ok" : (q.status === "ok" && q.count ? "ok" : q.status === "empty" ? (cellStatus[k] || "empty") : (cellStatus[k] || q.status)); }
+    for (const o of offers) { const k = `${o._rk}|${o.depart_date}`; if (o.price < (cellMin[k] ?? Infinity)) { cellMin[k] = o.price; cellStale[k] = !!o.stale; } }
+    const vals = Object.values(cellMin); const lo = Math.min(...vals), hi = Math.max(...vals);
+    const table = el("table", { class: "cal" });
+    // měsíce
+    const mrow = el("tr", null, el("th"));
+    let prevM = null, span = 0, cellM = null;
+    for (const d of planDates) { const m = +d.slice(5, 7); if (m !== prevM) { if (cellM) cellM.setAttribute("colspan", span); cellM = el("th", { class: "month" }, MONTHS[m]); mrow.append(cellM); span = 0; prevM = m; } span++; }
+    if (cellM) cellM.setAttribute("colspan", span);
+    table.append(mrow);
+    table.append(el("tr", null, el("th"), planDates.map((d) => el("th", null, el("div", null, dday(d) + "."), el("div", { class: "muted" }, wd(d))))));
+    const globalMin = Math.min(...fresh.map((o) => o.price), Infinity);
+    for (const r of routeOrder) {
+      const tr = el("tr", null, el("th", { class: "row" }, el("span", { style: `color:${routeColor(r)}` }, "● "), routeName(r)));
+      for (const d of planDates) {
+        const k = `${r}|${d}`; const v = cellMin[k]; const st = cellStatus[k];
+        let c;
+        if (v == null) c = el("div", { class: "cell " + (st === "empty" ? "nosale" : "none"), title: st === "empty" ? `${routeName(r)} ${dcz(d)}: bez nabídek (prodej zřejmě ještě není otevřený)` : `${routeName(r)} ${dcz(d)}: nezjištěno` }, st === "empty" ? "·" : "?");
+        else {
+          const p = hi > lo ? 90 - ((v - lo) / (hi - lo)) * 80 : 50;
+          c = el("div", { class: "cell" + (p > 55 ? " dark" : "") + (cellStale[k] ? " stale" : "") + (v === globalMin ? " min" : ""), style: `--p:${p.toFixed(0)}%`, title: `${routeName(r)} · odlet ${dcz(d)}: od ${czk(v)}/os${cellStale[k] ? " (starší data)" : ""}` }, kcs(v));
+          c.addEventListener("click", () => { selectedCell = selectedCell === k ? null : k; renderCalendar(); renderCalendarDetail(r, d); });
+          if (selectedCell === k) c.classList.add("sel");
+        }
+        tr.append(el("td", null, c));
+      }
+      table.append(tr);
+    }
+    box.append(table);
+    const L = $("#calendarLegend"); L.innerHTML = "";
+    L.append("Cena v tisících Kč/os: nejlevnější", el("i", { class: "ramp" }), "nejdražší", el("span", { style: "--c:transparent; margin-left:14px" }, "· = bez nabídek (prodej neotevřen)"), el("span", { style: "--c:transparent" }, "★ = nejnižší cena skenu"), el("span", { style: "--c:transparent" }, "bledé = starší data"));
+  }
+  function renderCalendarDetail(r, d) {
+    const box = $("#calendarDetail");
+    if (!selectedCell) { box.hidden = true; box.innerHTML = ""; return; }
+    box.hidden = false; box.innerHTML = "";
+    const list = sortBy(offers.filter((o) => o._rk === r && o.depart_date === d && o.score != null), "score").slice(0, 3);
+    box.append(el("div", { class: "panel-head" }, el("h2", null, `${routeName(r)} · odlet ${wd(d)} ${dcz(d)}`), el("span", { class: "muted small" }, `${list.length} nejlepší nabídky pro tento den`)));
+    box.append(el("div", { class: "cards" }, list.map((o, i) => card(o, i))));
+  }
+
+  // ---------- trend ----------
+  let chartHistory;
+  const hasChart = typeof Chart !== "undefined";
   function renderOverview() {
     const tb = $("#overview tbody"); tb.innerHTML = "";
-    const days = SERIES.days || [];
+    $("#trendMeta").textContent = days.length ? `${days.length} ${days.length === 1 ? "měření" : "měření"} · ${dshort(days[0].day)} – ${dshort(days[days.length - 1].day)}` : "";
     if (!days.length) { tb.append(el("tr", null, el("td", { colspan: "9", class: "empty" }, "Zatím žádná historie."))); return; }
     const last = days[days.length - 1];
     const dayDate = (d) => new Date(d.day + "T00:00:00Z");
@@ -169,114 +366,83 @@
       return el("td", { class: "num " + (diff < 0 ? "trend-down" : diff > 0 ? "trend-up" : "") }, `${diff > 0 ? "+" : ""}${czk(diff)} (${pct > 0 ? "+" : ""}${pct.toFixed(0)} %)`);
     };
     for (const r of routeOrder) {
-      const k = rk(r);
-      const series = days.map((d) => (d.routes[k] || {}).min ?? null);
+      const k = rk(r); const series = days.map((d) => (d.routes[k] || {}).min ?? null);
       if (!series.some((x) => x != null)) continue;
       const now = series[series.length - 1];
       let minV = Infinity, minD = null, maxV = -Infinity, maxD = null;
       days.forEach((d, i) => { const v = series[i]; if (v == null) return; if (v < minV) { minV = v; minD = d.day; } if (v > maxV) { maxV = v; maxD = d.day; } });
-      const ref = d7 ? (d7.routes[k] || {}).min : prev ? (prev.routes[k] || {}).min : null;
-      let verdict = el("td", { class: "verdict-flat" }, days.length < 2 ? "málo dat" : "stabilní");
-      if (now != null && ref != null) {
-        const pct = ((now - ref) / ref) * 100;
-        if (pct <= -3) verdict = el("td", { class: "verdict-down" }, `klesá (${pct.toFixed(0)} %)`);
-        else if (pct >= 3) verdict = el("td", { class: "verdict-up" }, `roste (+${pct.toFixed(0)} %)`);
-      }
-      if (now != null && now <= minV && days.length >= 3) verdict.append(" · na minimu ★");
+      const v = routeVerdict(r);
+      const vcell = el("td", { class: v.state === "good" ? "verdict-down" : v.state === "warn" ? "verdict-up" : "verdict-flat" }, v.label);
       tb.append(el("tr", null,
-        el("td", null, el("span", { style: `color:${routeColor(r)}` }, "● "), `${city(r.split("→")[0])} → ${city(r.split("→")[1])}`),
+        el("td", null, el("span", { style: `color:${routeColor(r)}` }, "● "), routeName(r)),
         el("td", { class: "num" }, el("strong", null, czk(now))),
         delta(now, prev ? (prev.routes[k] || {}).min : null), delta(now, d7 ? (d7.routes[k] || {}).min : null), delta(now, d30 ? (d30.routes[k] || {}).min : null),
         el("td", { class: "num" }, isFinite(minV) ? `${czk(minV)} (${dshort(minD)})` : "–"),
         el("td", { class: "num" }, isFinite(maxV) ? `${czk(maxV)} (${dshort(maxD)})` : "–"),
-        el("td", null, sparkline(series)), verdict));
+        el("td", null, sparkline(series)), vcell));
     }
   }
-
-  // ---------- KPIs ----------
-  function renderKpis(list) {
-    const k = $("#kpis"); k.innerHTML = "";
-    const tile = (label, value, hint) => k.append(el("div", { class: "kpi" }, el("div", { class: "label" }, label), el("div", { class: "value" }, value), el("div", { class: "hint" }, hint || "")));
-    if (!list.length) { tile("Nabídky", "0", "nic neodpovídá filtrům"); return; }
-    const cheapest = sortBy(list, "price")[0];
-    const best = sortBy(list, "score")[0];
-    const prices = sortBy(list, "price").map((o) => o.price);
-    const median = prices[Math.floor(prices.length / 2)];
-    tile("Nejlevnější / os", czk(cheapest.price), `${cheapest.route} · ${dshort(cheapest.depart_date)}–${dshort(cheapest.return_date)}`);
-    tile("Nejlepší poměr", czk(best.price), `skóre ${czk(best.score)} · ${best.airlines.join(", ") || best.route}`);
-    tile(`Pro ${travelers} os.`, czk(best.price * travelers), "nejlepší poměr × počet cestujících");
-    tile("Medián ceny", czk(median), `z ${list.length} nabídek`);
-    const days = SERIES.days || [];
-    if (days.length >= 2) {
-      const minOf = (d) => Math.min(...Object.values(d.routes).map((r) => r.min).filter((x) => x != null));
-      const a = minOf(days[days.length - 2]), b = minOf(days[days.length - 1]);
-      if (isFinite(a) && isFinite(b)) tile("Změna minima od minula", (b - a > 0 ? "+" : "") + czk(b - a), `${czk(a)} → ${czk(b)} (celé okno)`);
-    } else tile("Historie", `${days.length} den`, "trend se ukáže po více bězích");
-  }
-
-  // ---------- top cards ----------
-  function renderTop(list) {
-    const t = $("#top"); t.innerHTML = "";
-    const top = sortBy(list, "score").slice(0, 6);
-    if (!top.length) { t.append(el("div", { class: "empty" }, "Žádné nabídky pro zvolené filtry.")); return; }
-    top.forEach((o, i) => t.append(el("div", { class: "card" },
-      el("div", { class: "head" }, el("div", { class: "price" }, czk(o.price), el("span", { class: "muted small" }, ` /os · ${czk(o.price * travelers)} pro ${travelers}`)), el("div", { class: "rank" }, `#${i + 1} · skóre ${czk(o.score)}`)),
-      el("div", { class: "route" }, `${city(o.origin)} → ${city(o.destination)}  ·  ${o.route}`),
-      el("div", { class: "meta" }, `${dcz(o.depart_date)} – ${dcz(o.return_date)} (${o.nights} dní) · tam ${dur(o.duration_min)} · ${o.airlines.join(", ") || "–"}`),
-      badges(o), legList(o), sellersRow(o),
-      el("div", { class: "small muted" }, "Vývoj ceny termínu: ", sparkline(queryHistory(o))), linkRow(o),
-    )));
-  }
-
-  // ---------- charts ----------
-  let chartDates, chartHistory;
-  function chartTheme() {
-    if (!hasChart) return;
-    Chart.defaults.color = cssVar("--text-2");
-    Chart.defaults.borderColor = cssVar("--grid");
-    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
-  }
-  const legend = (id, items) => { const L = $(id); L.innerHTML = ""; items.forEach(([name, c]) => L.append(el("span", { style: `--c:${c}` }, name))); };
-  const baseOpts = (fmtTitle) => ({
-    responsive: true, maintainAspectRatio: false, animation: false,
-    interaction: { mode: "index", intersect: false },
-    plugins: { legend: { display: false }, tooltip: { callbacks: { title: (it) => fmtTitle(it[0].label), label: (c) => ` ${c.dataset.label}: ${czk(c.parsed.y)}` } } },
-    scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true } },
-      y: { beginAtZero: false, ticks: { callback: (v) => Math.round(v / 1000) + " tis." }, grid: { color: cssVar("--grid") } } },
-    elements: { line: { borderWidth: 2, tension: .2, spanGaps: true }, point: { radius: 3, hoverRadius: 6, hitRadius: 10 } },
-  });
-  const hasChart = typeof Chart !== "undefined";
-  function renderChartDates(list) {
-    if (!hasChart) { $("#legendDates").textContent = "Knihovna grafů se nenačetla."; return; }
-    const dates = [...new Set(list.map((o) => o.depart_date))].sort();
-    const byRoute = {};
-    for (const o of list) { const r = `${o.origin}→${o.destination}`; (byRoute[r] ||= {}); byRoute[r][o.depart_date] = Math.min(byRoute[r][o.depart_date] ?? Infinity, o.price); }
-    const routes = routeOrder.filter((r) => byRoute[r]).concat(Object.keys(byRoute).filter((r) => !routeOrder.includes(r))).slice(0, 6);
-    const ds = routes.map((r) => ({ label: r, data: dates.map((d) => byRoute[r][d] ?? null), borderColor: routeColor(r), backgroundColor: routeColor(r) }));
-    legend("#legendDates", routes.map((r) => [r, routeColor(r)]));
-    if (chartDates) chartDates.destroy();
-    chartDates = new Chart($("#chartDates"), { type: "line", data: { labels: dates.map(dshort), datasets: ds }, options: baseOpts((l) => "odlet " + l) });
-  }
   function renderChartHistory() {
-    if (!hasChart) { $("#legendHistory").textContent = "Knihovna grafů se nenačetla."; return; }
-    const days = SERIES.days || [];
+    const L = $("#legendHistory"); L.innerHTML = "";
+    if (!hasChart) { L.textContent = "Knihovna grafů se nenačetla (offline?)."; return; }
+    Chart.defaults.color = cssVar("--text-2"); Chart.defaults.borderColor = cssVar("--grid"); Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
     const routes = routeOrder.filter((r) => days.some((d) => d.routes[r.replace("→", "-")]));
-    const ds = routes.map((r) => ({ label: r, data: days.map((d) => (d.routes[r.replace("→", "-")] || {}).min ?? null), borderColor: routeColor(r), backgroundColor: routeColor(r) }));
-    legend("#legendHistory", routes.map((r) => [r, routeColor(r)]));
+    const ds = routes.map((r) => ({ label: routeName(r), data: days.map((d) => (d.routes[r.replace("→", "-")] || {}).min ?? null), borderColor: routeColor(r), backgroundColor: routeColor(r) }));
+    routes.forEach((r) => L.append(el("span", { style: `--c:${routeColor(r)}` }, routeName(r))));
     if (chartHistory) chartHistory.destroy();
-    chartHistory = new Chart($("#chartHistory"), { type: "line", data: { labels: days.map((d) => dshort(d.day)), datasets: ds }, options: baseOpts((l) => "sken " + l) });
-    if (days.length < 2) $("#legendHistory").append(el("span", { class: "muted", style: "--c:transparent" }, "Graf se naplní po dalších denních bězích."));
+    chartHistory = new Chart($("#chartHistory"), { type: "line", data: { labels: days.map((d) => dshort(d.day)), datasets: ds }, options: {
+      responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: "index", intersect: false },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { title: (it) => "sken " + it[0].label, label: (c) => ` ${c.dataset.label}: ${czk(c.parsed.y)}` } } },
+      scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true } }, y: { ticks: { callback: (v) => Math.round(v / 1000) + " tis." }, grid: { color: cssVar("--grid") } } },
+      elements: { line: { borderWidth: 2, tension: .2, spanGaps: true }, point: { radius: 3, hoverRadius: 6, hitRadius: 10 } } } });
+    if (days.length < 2) L.append(el("span", { class: "muted", style: "--c:transparent" }, "Křivky se vykreslí po dalších denních bězích."));
   }
 
-  // ---------- table ----------
+  // ---------- hlášení ----------
+  function renderAlerts() {
+    const box = $("#alerts"); box.innerHTML = "";
+    const today = LATEST.day; const todays = ALERTS.filter((a) => a.day === today);
+    $("#alertsMeta").textContent = ALERTS.length ? `${todays.length} dnes · ${ALERTS.length} celkem` : "";
+    if (!ALERTS.length) { box.append(el("div", { class: "empty" }, `Zatím žádné hlášení. Přijde, jakmile cena spadne pod ${czk((cfg.alerts || {}).target_price || 15000)}/os, prudce klesne od minula, nebo bude výrazně pod historií termínu.`)); return; }
+    ALERTS.slice(0, 10).forEach((a) => box.append(el("div", { class: "alert " + (a.severity || "") },
+      el("div", { class: "price" }, czk(a.price), el("span", { class: "muted small" }, " /os")),
+      el("div", { class: "when" }, (a.day === today ? "dnes" : dcz(a.day)) + " · " + (a.kind_label || a.kind)),
+      el("div", { class: "body" },
+        el("div", { class: "title" }, `${city(a.origin)} → ${city(a.destination)} · ${dcz(a.depart_date)} – ${dcz(a.return_date)} (${a.nights} dní) · ${(a.airlines || []).join(", ") || "–"} · ${a.stops === 0 ? "přímý" : a.stops === 1 ? "1 přestup" : a.stops + " přestupy"}`),
+        el("div", { class: "reason" }, a.reason),
+        el("div", { class: "links" }, Object.entries(a.links || {}).slice(0, 5).map(([k, u], i) => el("a", { href: u, target: "_blank", rel: "noopener", class: i === 0 ? "primary" : null }, LINK_NAMES[k] || k)))))));
+    if (ALERTS.length > 10) box.append(el("div", { class: "muted small" }, `… a dalších ${ALERTS.length - 10} starších v data/alerts.json`));
+  }
+
+  // ---------- všechny nabídky ----------
+  const F = { origin: "", dest: "", stops: "", nights: "", month: "", maxPrice: "", sort: "score", stale: "1" };
+  const uniq = (k) => [...new Set(offers.map((o) => o[k]))].sort();
+  const sel = (key, label, opts) => { const s = el("select", { id: "f-" + key }); for (const [v, t] of opts) s.append(el("option", { value: v }, t)); s.value = F[key]; s.addEventListener("change", () => { F[key] = s.value; renderTable(); }); return el("label", null, label, s); };
+  function buildFilters() {
+    const fl = $("#filters"); fl.innerHTML = "";
+    fl.append(
+      sel("origin", "Odkud", [["", "vše"], ...uniq("origin").map((v) => [v, `${city(v)} (${v})`])]),
+      sel("dest", "Kam", [["", "vše"], ...uniq("destination").map((v) => [v, `${city(v)} (${v})`])]),
+      sel("stops", "Max. přestupů", [["", "libovolně"], ["0", "přímý"], ["1", "max 1"], ["2", "max 2"]]),
+      sel("nights", "Délka (dní)", [["", "vše"], ...uniq("nights").map((v) => [String(v), String(v)])]),
+      sel("month", "Měsíc odletu", [["", "srpen + září"], ["8", "srpen"], ["9", "září"]]),
+      sel("sort", "Řadit podle", [["score", "skóre (cena/výkon)"], ["price", "ceny"], ["depart_date", "data odletu"], ["duration_min", "délky cesty"]]),
+      sel("stale", "Starší data", [["1", "zobrazit"], ["0", "skrýt"]]));
+    const mp = el("input", { type: "number", id: "f-maxPrice", placeholder: "např. 20000", min: "0", step: "500" }); mp.value = F.maxPrice;
+    mp.addEventListener("input", () => { F.maxPrice = mp.value; renderTable(); });
+    fl.append(el("label", null, `Max. cena/os (${CUR})`, mp));
+    const pr = $("#presets"); pr.innerHTML = "";
+    const preset = (t, f) => { const b = el("button", { class: "tab" }, t); b.addEventListener("click", () => { Object.assign(F, { origin: "", dest: "", stops: "", nights: "", month: "", maxPrice: "", sort: "score" }, f); buildFilters(); renderTable(); }); pr.append(b); };
+    preset("Vše", {}); preset("Max 1 přestup", { stops: "1" }); preset("Do 20 000 Kč", { maxPrice: "20000", sort: "price" }); preset("Jen srpen", { month: "8" }); preset("Jen září", { month: "9" }); preset("Nejrychlejší", { sort: "duration_min" });
+  }
+  const filtered = () => offers.filter((o) => (!F.origin || o.origin === F.origin) && (!F.dest || o.destination === F.dest) && (F.stops === "" || o.stops <= +F.stops) && (!F.nights || String(o.nights) === F.nights) && (!F.month || o._month === +F.month) && (!F.maxPrice || o.price <= +F.maxPrice) && (F.stale === "1" || !o.stale));
   let shown = 60, sortKey = "score", sortDir = 1;
-  document.querySelectorAll("th[data-sort]").forEach((th) => th.addEventListener("click", () => {
-    const k = th.dataset.sort; if (sortKey === k) sortDir *= -1; else { sortKey = k; sortDir = 1; } render();
-  }));
-  $("#more").addEventListener("click", () => { shown += 100; render(); });
-  function renderTable(list) {
+  document.querySelectorAll("th[data-sort]").forEach((th) => th.addEventListener("click", () => { const k = th.dataset.sort; if (sortKey === k) sortDir *= -1; else { sortKey = k; sortDir = 1; } renderTable(); }));
+  $("#more").addEventListener("click", () => { shown += 100; renderTable(); });
+  function renderTable() {
     const tb = $("#table tbody"); tb.innerHTML = "";
-    const rows = sortBy(list, sortKey, sortDir);
+    const key = F.sort !== "score" || sortKey !== "score" ? (sortKey !== "score" ? sortKey : F.sort) : "score";
+    const rows = sortBy(filtered(), key, sortDir);
     $("#count").textContent = `(${rows.length})`;
     rows.slice(0, shown).forEach((o) => {
       const trend = o.yesterday_min == null ? "–" : o.price < o.yesterday_min ? `↓ ${czk(o.yesterday_min - o.price)}` : o.price > o.yesterday_min ? `↑ ${czk(o.price - o.yesterday_min)}` : "=";
@@ -284,42 +450,35 @@
       const btn = el("button", { class: "toggle" }, "detail");
       const tr = el("tr", null,
         el("td", { class: "num" }, czk(o.score)), el("td", { class: "num" }, el("strong", null, czk(o.price))), el("td", { class: "num" }, czk(o.price * travelers)),
-        el("td", null, dcz(o.depart_date)), el("td", null, `${dcz(o.return_date)} (${o.nights} d)`), el("td", null, o.route),
-        el("td", null, o.airlines.join(", ") || "–"), el("td", { class: "num" }, o.stops), el("td", null, dur(o.duration_min)),
-        el("td", { class: trendCls }, trend + (o.is_all_time_low ? " ★" : "")), el("td", null, o.source + (o.stale ? " (starší)" : "")), el("td", null, btn));
+        el("td", null, `${wd(o.depart_date)} ${dcz(o.depart_date)}`), el("td", null, `${dcz(o.return_date)} (${o.nights} d)`), el("td", null, o.route),
+        el("td", null, o.airlines.join(", ") || "–"), el("td", { class: "num" }, o.stops), el("td", null, durShort(o.duration_min)),
+        el("td", { class: trendCls }, trend + (o.is_all_time_low ? " ★" : "") + (o.stale ? " (starší)" : "")), el("td", null, btn));
       tb.append(tr);
       btn.addEventListener("click", () => {
         if (tr.nextSibling && tr.nextSibling.classList.contains("detail")) { tr.nextSibling.remove(); return; }
-        const d = el("tr", { class: "detail" }, el("td", { colspan: "12" }, badges(o), legList(o) || "", sellersRow(o) || "",
-          el("div", { class: "small muted" }, "Skóre: " + breakdown(o)), el("div", { class: "small muted" }, "Vývoj ceny tohoto termínu: ", sparkline(queryHistory(o))), linkRow(o)));
-        tr.after(d);
+        tr.after(el("tr", { class: "detail" }, el("td", { colspan: "11" }, timeline(o), badges(o), legList(o), sellersRow(o), el("div", { class: "why" }, why(o)), el("div", { class: "small muted" }, "Vývoj ceny tohoto termínu: ", sparkline(queryHistory(o))), linkRow(o))));
       });
     });
     $("#more").hidden = rows.length <= shown;
-    if (!rows.length) tb.append(el("tr", null, el("td", { colspan: "12", class: "empty" }, "Žádné nabídky.")));
+    if (!rows.length) tb.append(el("tr", null, el("td", { colspan: "11", class: "empty" }, "Žádné nabídky pro zvolené filtry.")));
   }
 
-  // ---------- run info ----------
+  // ---------- stav skenu ----------
   function renderRunInfo() {
-    const s = LATEST.stats, c = LATEST.config;
-    const errs = (LATEST.queries || []).filter((q) => q.status === "error");
-    const empty = (LATEST.queries || []).filter((q) => q.status === "empty" || (q.status === "ok" && !q.count));
-    const r = $("#runinfo");
-    r.innerHTML = `<p>Plán: ${c.origins.join(", ")} → ${c.destinations.join(", ")}, odlety ${dcz(c.depart_from)} – ${dcz(c.depart_to)} po ${c.depart_step_days} dnech, délky ${c.trip_lengths.join("/")} dní, max. ${c.max_stops ?? "∞"} přestupů, zdroje: ${c.sources.join(", ")}.</p>
-      <p>Dotazů celkem ${s.queries_total}: OK ${s.queries_ok}, bez výsledků ${empty.length}, chyb ${errs.length}, přeskočeno ${s.queries_skipped}, převzato ze staršího běhu ${s.queries_stale}. Běh trval ${Math.round(s.duration_s / 60)} min.</p>`;
-    if (empty.length) r.append(el("p", { class: "muted" }, `Bez výsledků (často ještě neotevřený prodej): ${empty.slice(0, 12).map((q) => `${q.origin}→${q.destination} ${dshort(q.depart_date)}`).join(", ")}${empty.length > 12 ? " …" : ""}`));
+    const s = LATEST.stats, c = cfg; const r = $("#runinfo"); r.innerHTML = "";
+    $("#runMeta").textContent = `${s.queries_ok} z ${s.queries_total} dotazů s nabídkou · ${Math.round(s.duration_s / 60)} min`;
+    const cov = el("div", { class: "cover" });
+    for (const m of coverage) cov.append(el("div", { class: "chip" }, el("div", null, el("strong", null, m.name), ` · ${m.okDates} z ${m.dates} dnů odletu má nabídky`), el("div", { class: "bar" }, el("i", { style: `width:${m.dates ? (m.okDates / m.dates) * 100 : 0}%` }))));
+    r.append(cov);
+    r.append(el("p", null, `Plán: ${c.origins.map(city).join(", ")} → ${c.destinations.map(city).join(", ")}, odlety ${dcz(c.depart_from)} – ${dcz(c.depart_to)} po ${c.depart_step_days} dnech, délky ${c.trip_lengths.join("/")} dní, max. ${c.max_stops ?? "∞"} přestupů, zdroje: ${c.sources.join(", ")}.`));
+    const errs = queries.filter((q) => q.status === "error");
+    const empty = queries.filter((q) => q.status === "empty" || (q.status === "ok" && !q.count));
+    r.append(el("p", null, `Dotazů ${s.queries_total}: s nabídkou ${s.queries_ok}, bez výsledků ${empty.length}, chyb ${errs.length}, přeskočeno ${s.queries_skipped}, převzato ze staršího běhu ${s.queries_stale}.`));
+    if (empty.length) r.append(el("details", null, el("summary", { class: "muted" }, `Termíny bez výsledků (${empty.length}) – typicky ještě neotevřený prodej`), el("p", { class: "small muted" }, empty.map((q) => `${q.origin}→${q.destination} ${dshort(q.depart_date)}–${dshort(q.return_date)}`).join(", "))));
     if (errs.length) r.append(el("details", null, el("summary", null, `Chyby (${errs.length})`), el("ul", { class: "small" }, errs.slice(0, 30).map((q) => el("li", null, `${q.source} ${q.origin}→${q.destination} ${q.depart_date}: ${q.error || q.status}`)))));
   }
 
-  function render() {
-    chartTheme();
-    const list = filtered();
-    renderKpis(list); renderTop(list); renderChartDates(list); renderTable(list);
-  }
-  renderRunInfo();
-  renderAlerts();
-  renderOverview();
-  renderChartHistory();
-  render();
-  if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { render(); renderChartHistory(); });
+  renderVerdict(); renderInsights(); renderAlerts(); renderDeals(); renderCalendar(); renderOverview(); renderChartHistory(); buildFilters(); renderTable(); renderRunInfo();
+  if (ALERTS.length) $("#alertsPanel").scrollIntoView && 0;
+  if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { renderChartHistory(); renderCalendar(); });
 })();

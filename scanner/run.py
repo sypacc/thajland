@@ -236,14 +236,16 @@ def _enrich_sellers(offer_dicts: list[dict[str, Any]], n: int, remaining_s: floa
         if time.monotonic() - t0 > min(remaining_s - 60, 600):
             break
         try:
-            sellers, err = google_flights.fetch_sellers(o["links"]["google"], o["price"],
-                                                        (o.get("airlines") or [None])[0])
+            sellers, err, insight = google_flights.fetch_sellers(o["links"]["google"], o["price"],
+                                                                 (o.get("airlines") or [None])[0])
         except Exception as e:  # noqa: BLE001
-            sellers, err = [], f"{type(e).__name__}: {e}"
+            sellers, err, insight = [], f"{type(e).__name__}: {e}", None
         o["sellers"] = sellers
         o["sellers_error"] = err
-        log.info("Prodejci %s %s %s: %s", o["route"], o["depart_date"], o["price"],
-                 ", ".join(f"{x['name']} {x['price']}" for x in sellers) or err)
+        if insight:
+            o["price_insight"] = insight
+        log.info("Prodejci %s %s %s: %s | insight %s", o["route"], o["depart_date"], o["price"],
+                 ", ".join(f"{x['name']} {x['price']}" for x in sellers) or err, insight)
         time.sleep(2)
 
 

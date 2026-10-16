@@ -17,9 +17,15 @@ a dashboard, který ukazuje nejlepší příležitosti podle **poměru cena/výk
    za 2. a další přestup, za dlouhé (>5 h) či rizikově krátké (<1 h) přestupy ± korekce za aerolinku,
    přímý let má bonus. Váhy jsou v `config.yaml` → sekce `scoring`.
 4. Výsledky uloží do `data/` (poslední sken + denní historie + série pro grafy) a commitne je.
-5. **Dashboard** (`index.html`) se publikuje na GitHub Pages: top příležitosti, grafy ceny podle data
-   odletu a vývoje v čase, tabulka všech nabídek s filtry, detail itineráře (přestupy, časy),
-   a u každé nabídky odkazy na **Google Flights, Kiwi.com, Skyscanner, Kayak a Azair** s předvyplněnými daty.
+5. **Dashboard** (`index.html`, GitHub Pages) v pořadí podle důležitosti:
+   **Verdikt** (kupovat / férová cena / počkat, po trasách, s cenou pro N osob a pokrytím termínů) →
+   **Postřehy z dat** (odkud a kam je levněji, nejlevnější týden, délka pobytu, přímé lety, trend) →
+   **Hlášení** → **Nejlepší nabídky** (taby: poměr cena/výkon, nejlevnější, nejrychlejší, max 1 přestup;
+   karta má časovou osu trasy s přestupy, „Kde koupit“ s cenami prodejců, Googlí odhad obvyklého rozpětí,
+   rozpad skóre a odkazy na Google Flights, Kiwi, Skyscanner, Kayak, Azair, Pelikán, Letušku) →
+   **Kalendář cen** (heatmapa den odletu × trasa, klik ukáže nabídky dne) → **Vývoj v čase** (tabulka změn
+   vs. minule / 7 / 30 dní, minima, sparklines, graf) → sbalená tabulka všech nabídek s filtry a předvolbami →
+   stav skenu a pokrytí termínů → metodika.
 
 ## Hlášení dealů (alerty)
 

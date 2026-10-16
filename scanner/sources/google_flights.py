@@ -278,21 +278,39 @@ def search(origin: str, dest: str, depart: dt.date, ret: dt.date, *, currency: s
 _PRICE_LINE = re.compile(r"^(\d[\d\s .]{2,})\s*(?:Kč|CZK|€|EUR|\$)$")
 
 
-def _parse_booking_options(text: str) -> list[dict[str, Any]]:
-    """Z textu stránky 'Možnosti rezervace' vytáhne dvojice (prodejce, cena).
+_INSIGHT_RE = re.compile(r"je (nízká|typická|vysoká|low|typical|high) cena|is (low|typical|high)", re.I)
+_CATEGORY_RE = re.compile(r"(Letecká společnost|Cestovní kancelář|Online cestovní agentura|Airline|Travel agency|Online travel agency)$")
+
+
+def _clean_seller(name: str) -> str:
+    name = re.sub(r"^(Rezervovat přes|Book with|Book on)\s+", "", name).strip()
+    name = _CATEGORY_RE.sub("", name).strip(" ,·")
+    return name
+
+
+def _parse_booking_options(text: str) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """Z textu 'Možnosti rezervace' vytáhne (prodejci, cenový insight Googlu).
 
     Google vykresluje každou možnost jako blok řádků: název prodejce …, cena, tlačítko.
-    Bereme poslední 'jmenný' řádek před řádkem s cenou.
+    Bereme poslední 'jmenný' řádek před řádkem s cenou. Řádky typu '19 264 Kč je typická cena'
+    a následující dvě ceny jsou Googlí odhad obvyklého rozpětí – ukládáme zvlášť.
     """
     lines = [l.strip() for l in text.splitlines()]
     sellers: list[dict[str, Any]] = []
+    insight: dict[str, Any] | None = None
     skip = {"vybrat", "select", "pokračovat", "continue", "rezervovat", "book", "zobrazit", "více",
             "more", "cena", "price", "celkem", "total", "oddělené letenky", "separate tickets",
             "samostatné letenky", "self transfer", "vlastní přestup", "nejlevnější", "cheapest",
-            "doporučeno", "recommended", "nejlepší", "best"}
+            "doporučeno", "recommended", "nejlepší", "best", "typické rozpětí", "typical range",
+            "informace o ceně", "price insights", "obvyklé rozpětí", "zobrazit historii cen",
+            "view price history"}
     for i, l in enumerate(lines):
-        m = _PRICE_LINE.match(l.replace(" ", " "))
+        m = _PRICE_LINE.match(l.replace("\u00a0", " "))
         if not m:
+            mi = _INSIGHT_RE.search(l)
+            if mi and insight is None:
+                lvl = (mi.group(1) or mi.group(2) or "").lower()
+                insight = {"level": {"low": "nízká", "typical": "typická", "high": "vysoká"}.get(lvl, lvl), "low": None, "high": None}
             continue
         price = int(re.sub(r"\D", "", m.group(1)) or 0)
         if price <= 0:
@@ -300,15 +318,27 @@ def _parse_booking_options(text: str) -> list[dict[str, Any]]:
         name = None
         for j in range(i - 1, max(-1, i - 6), -1):
             cand = lines[j]
-            if not cand or cand.lower() in skip or _PRICE_LINE.match(cand) or len(cand) > 60:
+            if not cand or cand.lower() in skip or _PRICE_LINE.match(cand) or len(cand) > 70:
                 continue
             if any(ch.isdigit() for ch in cand) and len(cand) < 6:
                 continue
             name = cand
             break
+        if not name:
+            continue
+        if _INSIGHT_RE.search(name):
+            if insight is not None:
+                if insight["low"] is None:
+                    insight["low"] = price
+                elif insight["high"] is None:
+                    insight["high"] = price
+            continue
+        name = _clean_seller(name)
         if name and not any(s["name"] == name and s["price"] == price for s in sellers):
             sellers.append({"name": name, "price": price})
-    return sellers
+    if insight and insight["low"] and insight["high"] and insight["low"] > insight["high"]:
+        insight["low"], insight["high"] = insight["high"], insight["low"]
+    return sellers, insight
 
 
 def _select_row(page, row) -> None:
@@ -351,9 +381,9 @@ def _log_page_state(page, why: str) -> None:
 
 
 def fetch_sellers(url: str, price: int, airline_hint: str | None = None, timeout_ms: int = 45000
-                  ) -> tuple[list[dict[str, Any]], str | None]:
+                  ) -> tuple[list[dict[str, Any]], str | None, dict[str, Any] | None]:
     """Otevře dotaz v headless Chromiu (incognito), vybere itinerář s danou cenou (a první
-    zpáteční let) a přečte 'Možnosti rezervace'. Vrací (prodejci, chyba)."""
+    zpáteční let) a přečte 'Možnosti rezervace'. Vrací (prodejci, chyba, cenový insight)."""
     from playwright.sync_api import sync_playwright
 
     price_str = f"{price:,}".replace(",", " ")
@@ -390,7 +420,7 @@ def fetch_sellers(url: str, price: int, airline_hint: str | None = None, timeout
             if items.count() == 0:
                 _debug_dump(f"sellers_nomatch_{price}.png", page.screenshot(full_page=True))
                 _log_page_state(page, f"cena {price_str} nenalezena")
-                return [], "itinerář s danou cenou nenalezen"
+                return [], "itinerář s danou cenou nenalezen", None
             step = "klik tam"
             _select_row(page, items.first)
             page.wait_for_timeout(3000)
@@ -411,19 +441,19 @@ def fetch_sellers(url: str, price: int, airline_hint: str | None = None, timeout
             except Exception:
                 _debug_dump(f"sellers_nobooking_{price}.png", page.screenshot(full_page=True))
                 _log_page_state(page, "bez sekce rezervace")
-                return [], "sekce 'Možnosti rezervace' se nezobrazila"
+                return [], "sekce 'Možnosti rezervace' se nezobrazila", None
             txt = page.inner_text("body")
             idx = max(txt.find("Možnosti rezervace"), txt.find("Booking options"))
             section = txt[idx: idx + 6000]
             _debug_dump(f"sellers_section_{price}.txt", section)
-            sellers = _parse_booking_options(section)
-            return sellers, None if sellers else "nepodařilo se rozparsovat prodejce"
+            sellers, insight = _parse_booking_options(section)
+            return sellers, (None if sellers else "nepodařilo se rozparsovat prodejce"), insight
         except Exception as e:  # noqa: BLE001
             try:
                 _debug_dump(f"sellers_fail_{price}.png", page.screenshot(full_page=True))
             except Exception:
                 pass
-            return [], f"[{step}] {type(e).__name__}: {str(e)[:120]}"
+            return [], f"[{step}] {type(e).__name__}: {str(e)[:120]}", None
         finally:
             ctx.close()
             browser.close()
