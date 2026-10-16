@@ -368,10 +368,11 @@
     for (const r of routeOrder) {
       const k = rk(r); const series = days.map((d) => (d.routes[k] || {}).min ?? null);
       if (!series.some((x) => x != null)) continue;
-      const now = series[series.length - 1];
+      let now = series[series.length - 1];
       let minV = Infinity, minD = null, maxV = -Infinity, maxD = null;
       days.forEach((d, i) => { const v = series[i]; if (v == null) return; if (v < minV) { minV = v; minD = d.day; } if (v > maxV) { maxV = v; maxD = d.day; } });
       const v = routeVerdict(r);
+      if (v.cur != null) now = v.cur;  // stejná hodnota jako ve verdiktu (poslední sken)
       const vcell = el("td", { class: v.state === "good" ? "verdict-down" : v.state === "warn" ? "verdict-up" : "verdict-flat" }, v.label);
       tb.append(el("tr", null,
         el("td", null, el("span", { style: `color:${routeColor(r)}` }, "● "), routeName(r)),
