@@ -90,6 +90,17 @@ def parse_html(html: str) -> ResultList:
                 continue
     if skipped:
         log.info("parser: %d položek přeskočeno (neúplná data)", skipped)
+    if not flights:
+        try:
+            shape = [(i, type(payload[i]).__name__, (len(payload[i]) if isinstance(payload[i], list) else None))
+                     for i in range(min(len(payload), 12))]
+            n2 = len(payload[2][0]) if isinstance(payload[2], list) and payload[2] and isinstance(payload[2][0], list) else payload[2]
+            n3 = len(payload[3][0]) if isinstance(payload[3], list) and payload[3] and isinstance(payload[3][0], list) else payload[3]
+            log.info("parser: 0 itinerářů; payload[2][0]=%s payload[3][0]=%s; tvar=%s; 'Kč' v HTML=%d",
+                     n2 if not isinstance(n2, list) else f"list({len(n2)})", n3 if not isinstance(n3, list) else f"list({len(n3)})",
+                     shape, html.count("Kč"))
+        except Exception as e:  # noqa: BLE001
+            log.info("parser: 0 itinerářů (tvar nezjištěn: %s)", e)
     return flights
 
 
@@ -193,6 +204,20 @@ def search(origin: str, dest: str, depart: dt.date, ret: dt.date, *, currency: s
             results = parse_html(html)
             meta["method"] = "primp"
             meta["error"] = None
+            if not results:
+                _debug_dump(f"google_zero_{origin}-{dest}_{depart}.html", html, limit=20)
+                if playwright_fallback and playwright_on_not_found:
+                    # stránka bez itinerářů – zkusit vykreslenou verzi (Google někdy data dodá až JS)
+                    try:
+                        html2 = _fetch_html_playwright(url)
+                        r2 = parse_html(html2)
+                        if r2:
+                            results = r2
+                            meta["method"] = "playwright"
+                        else:
+                            meta["zero_confirmed"] = True
+                    except Exception as e:  # noqa: BLE001
+                        log.info("playwright kontrola prázdné stránky selhala: %s", e)
             break
         except FlightsNotFound as e:
             # Google vrací 'errorHasStatus' i při dočasné chybě / soft-blocku, ne jen bez letů.

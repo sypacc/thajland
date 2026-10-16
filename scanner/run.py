@@ -34,7 +34,7 @@ def _compact(o: Offer) -> dict[str, Any]:
 
 
 def run(cfg: Config, *, limit: int | None = None, only_source: str | None = None,
-        shuffle: bool = True) -> dict[str, Any]:
+        shuffle: bool = True, only_route: str | None = None) -> dict[str, Any]:
     started = time.monotonic()
     today = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
     scan = cfg.scan
@@ -51,6 +51,9 @@ def run(cfg: Config, *, limit: int | None = None, only_source: str | None = None
         sources = [s for s in sources if s == only_source] or [only_source]
 
     plan = cfg.query_plan()
+    if only_route:  # např. "PRG-HKT" – diagnostika jedné trasy
+        o_, d_ = only_route.upper().split("-")
+        plan = [p for p in plan if p[0] == o_ and p[1] == d_]
     if shuffle:
         # jiné pořadí každý den => při vyčerpání rozpočtu se střídá, co se stihne
         random.Random(today).shuffle(plan)
@@ -112,7 +115,7 @@ def run(cfg: Config, *, limit: int | None = None, only_source: str | None = None
                         playwright_fallback=pw_fallback,
                         playwright_on_not_found=pw_not_found_confirmed < 3)
                     consecutive_blocked = 0
-                    if meta.get("not_found") and meta.get("method") == "playwright":
+                    if (meta.get("not_found") and meta.get("method") == "playwright") or meta.get("zero_confirmed"):
                         pw_not_found_confirmed += 1
                 else:
                     found, meta = azair.search(origin, dest, dep, ret, currency=cfg.currency)
@@ -272,6 +275,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--limit", type=int, default=None, help="max. počet dotazů (test)")
     ap.add_argument("--source", default=None, choices=["google", "azair"])
     ap.add_argument("--no-shuffle", action="store_true")
+    ap.add_argument("--route", default=None, help="jen jedna trasa, např. PRG-HKT (diagnostika)")
+    ap.add_argument("--max-stops", default=None, help="přepsat trip.max_stops (číslo nebo 'none')")
     ap.add_argument("--no-save", action="store_true")
     ap.add_argument("--no-notify", action="store_true", help="hlášení jen uložit, neposílat")
     ap.add_argument("-v", "--verbose", action="store_true")
@@ -280,7 +285,10 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     cfg = load_config(args.config)
-    payload = run(cfg, limit=args.limit, only_source=args.source, shuffle=not args.no_shuffle)
+    if args.max_stops is not None:
+        cfg.raw["trip"]["max_stops"] = None if str(args.max_stops).lower() == "none" else int(args.max_stops)
+    payload = run(cfg, limit=args.limit, only_source=args.source, shuffle=not args.no_shuffle,
+                  only_route=args.route)
     st = payload["stats"]
     log.info("Hotovo: %s", st)
 

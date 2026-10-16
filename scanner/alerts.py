@@ -151,6 +151,16 @@ def detect(payload: dict[str, Any], history: list[dict[str, Any]], cfg: dict[str
         })
     # Priorita: více důvodů a vyšší závažnost první, pak lepší skóre; omezit počet za běh.
     out.sort(key=lambda a: (sev_rank.get(a["severity"], 9), -len(a["kinds"]), a.get("score") or a["price"]))
+    # stejný odlet + stejná cena (jen jiná délka pobytu) = jedno hlášení
+    seen_same: set[tuple] = set()
+    merged = []
+    for a in out:
+        k = (a["origin"], a["destination"], a["depart_date"], a["price"], tuple(a["airlines"]))
+        if k in seen_same:
+            continue
+        seen_same.add(k)
+        merged.append(a)
+    out = merged
     max_per_run = int(cfg.get("max_per_run", 8))
     kept, dropped = out[:max_per_run], out[max_per_run:]
     if dropped:

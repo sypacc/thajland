@@ -14,6 +14,18 @@ on:
         description: "Jen jeden zdroj (google|azair), prázdné = všechny"
         required: false
         default: ""
+      route:
+        description: "Jen jedna trasa, např. PRG-HKT (diagnostika)"
+        required: false
+        default: ""
+      max_stops:
+        description: "Přepsat max. přestupů (číslo nebo none)"
+        required: false
+        default: ""
+      no_save:
+        description: "Jen test, neukládat data (true/false)"
+        required: false
+        default: "false"
 
 concurrency:
   group: scan
@@ -65,6 +77,9 @@ jobs:
           ARGS=""
           if [ -n "${{ github.event.inputs.limit }}" ]; then ARGS="$ARGS --limit ${{ github.event.inputs.limit }}"; fi
           if [ -n "${{ github.event.inputs.source }}" ]; then ARGS="$ARGS --source ${{ github.event.inputs.source }}"; fi
+          if [ -n "${{ github.event.inputs.route }}" ]; then ARGS="$ARGS --route ${{ github.event.inputs.route }}"; fi
+          if [ -n "${{ github.event.inputs.max_stops }}" ]; then ARGS="$ARGS --max-stops ${{ github.event.inputs.max_stops }}"; fi
+          if [ "${{ github.event.inputs.no_save }}" = "true" ]; then ARGS="$ARGS --no-save"; fi
           python -m scanner.run $ARGS
 
       - name: Ladicí report (do logu)
