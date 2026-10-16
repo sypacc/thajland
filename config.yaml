@@ -1,0 +1,92 @@
+# Konfigurace sledování letenek do Thajska (léto 2027)
+# Všechny hodnoty lze měnit; scanner si je načte při každém běhu.
+
+trip:
+  # Odkud létáme (IATA kódy). PRG = Praha, VIE = Vídeň (častá levnější alternativa z Česka).
+  origins: [PRG, VIE]
+  # Kam (BKK = Bangkok Suvarnabhumi, HKT = Phuket). Případně přidej DMK, CNX, USM, KBV.
+  destinations: [BKK, HKT]
+  # Okno odletů (včetně) a krok mezi testovanými odlety ve dnech.
+  depart_from: "2027-08-01"
+  depart_to: "2027-09-30"
+  depart_step_days: 3
+  # Délka pobytu ve dnech (odlet -> návrat). "2 týdny" = 13–15 dní.
+  trip_lengths: [13, 14, 15]
+  # Dotaz běží pro 1 dospělého (cena za osobu). Kolik vás letí – jen pro zobrazení celkové ceny.
+  travelers: 2
+  cabin: economy
+  currency: CZK
+  # Max. počet přestupů v dotazu na Google Flights (null = bez omezení).
+  max_stops: 2
+
+scan:
+  # Prodleva mezi dotazy (s), aby nás Google nezačal blokovat.
+  delay_seconds: 2.0
+  jitter_seconds: 1.5
+  retries: 3
+  # Pojistka proti nekonečným běhům.
+  max_queries: 400
+  time_budget_minutes: 45
+  # Kolik nabídek z každého dotazu uložit (seřazeno podle skóre).
+  keep_per_query: 6
+  # Zdroje: google = Google Flights (hlavní), azair = Azair.eu (experimentální, levné kombinace)
+  sources:
+    google: true
+    azair: true
+  # Když selže primp fetch Google Flights, zkusí se headless Chromium (Playwright) v anonymním kontextu.
+  playwright_fallback: true
+
+# Skóre "cena/výkon": ke skutečné ceně přičítáme "virtuální" náklady za nepohodlí.
+# Výsledek = efektivní cena v Kč; čím nižší, tím lepší nabídka.
+scoring:
+  # Pohodlná referenční doba cesty tam (minuty). Nad ni se penalizuje každá hodina.
+  baseline_duration_min: 840      # 14 h
+  czk_per_extra_hour: 250
+  # Penalizace za každý přestup nad první (1 přestup je u Thajska norma).
+  czk_per_extra_stop: 1500
+  # Bonus za přímý let (záporné = zvýhodnění).
+  czk_direct_bonus: -1500
+  # Dlouhé přestupy: nad tuto hranici (min) penalizace za každou hodinu navíc.
+  layover_comfort_max_min: 300    # 5 h
+  czk_per_long_layover_hour: 300
+  # Krátké přestupy pod touto hranicí (min) = riziko nestihnutí.
+  layover_risky_min: 60
+  czk_risky_layover: 800
+  # Aerolinky: kladné = horší (připočte se), záporné = lepší (odečte se).
+  airline_adjust_czk:
+    "Emirates": -1200
+    "Qatar Airways": -1200
+    "Singapore Airlines": -1200
+    "EVA Air": -1000
+    "Cathay Pacific": -800
+    "Etihad": -800
+    "Turkish Airlines": -600
+    "Thai Airways": -600
+    "Austrian": -300
+    "Lufthansa": -300
+    "Swiss": -300
+    "KLM": -300
+    "Air France": -300
+    "Finnair": -200
+    "Oman Air": -200
+    "Saudia": 500
+    "Air China": 800
+    "China Eastern": 800
+    "China Southern": 800
+    "Hainan": 400
+    "Air Arabia": 800
+    "flydubai": 500
+    "Wizz Air": 1000
+    "Pegasus": 600
+    "Aeroflot": 3000
+    "Air Astana": 400
+    "Uzbekistan Airways": 600
+    "Air Serbia": 300
+    "Air India": 600
+    "Scoot": 800
+    "Norse Atlantic": 600
+    "Ethiopian": 700
+    "Egyptair": 700
+    "Kuwait Airways": 800
+    "Gulf Air": 300
+    "SriLankan": 300

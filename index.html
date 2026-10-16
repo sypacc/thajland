@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thajsko 2027 – letenky</title>
+<meta name="description" content="Denní přehled cen letenek z Česka do Thajska na 2 týdny v srpnu–září 2027, seřazený podle poměru cena/výkon.">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/chart.umd.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>🇹🇭 Thajsko 2027 · sledování letenek</h1>
+    <p class="sub">2 týdny · srpen–září 2027 · z Česka · řazeno podle poměru cena/výkon</p>
+    <div id="status" class="status">Načítám data…</div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="kpis" class="kpis" aria-label="Souhrn"></section>
+
+  <section class="panel">
+    <h2>Filtry</h2>
+    <div id="filters" class="filters"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Top příležitosti <span class="muted">(nejlepší poměr cena/výkon)</span></h2>
+    <div id="top" class="cards"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Nejnižší cena podle data odletu</h2>
+    <p class="muted small">Pro každý den odletu nejlevnější nalezená zpáteční letenka (za osobu) v posledním skenu. Čára = trasa.</p>
+    <div class="chart-wrap"><canvas id="chartDates" role="img" aria-label="Graf nejnižší ceny podle data odletu"></canvas></div>
+    <div id="legendDates" class="legend"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Vývoj nejnižší ceny v čase</h2>
+    <p class="muted small">Jak se den po dni mění nejlevnější nalezená letenka na trase (celé okno srpen–září). Dobrý okamžik ke koupi = cena blízko historického minima.</p>
+    <div class="chart-wrap"><canvas id="chartHistory" role="img" aria-label="Graf vývoje nejnižší ceny"></canvas></div>
+    <div id="legendHistory" class="legend"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Všechny nabídky <span id="count" class="muted"></span></h2>
+    <div class="table-wrap">
+      <table id="table">
+        <thead><tr>
+          <th data-sort="score">Skóre</th><th data-sort="price">Cena/os</th><th>Celkem</th>
+          <th data-sort="depart_date">Odlet</th><th>Návrat</th><th>Trasa</th><th>Aerolinky</th>
+          <th data-sort="stops">Přestupy</th><th data-sort="duration_min">Cesta tam</th><th>Trend</th><th>Zdroj</th><th></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <button id="more" class="btn" hidden>Zobrazit další</button>
+  </section>
+
+  <section class="panel">
+    <h2>Stav posledního skenu</h2>
+    <div id="runinfo" class="small"></div>
+  </section>
+
+  <section class="panel notes">
+    <h2>Jak to funguje</h2>
+    <ul>
+      <li><strong>Kdy:</strong> GitHub Action běží každý den ráno a projde všechny kombinace odlet × délka × letiště z <code>config.yaml</code>.</li>
+      <li><strong>Anonymně:</strong> každý dotaz je čistý požadavek bez cookies a historie (čerstvý runner), takže ceny nejsou ovlivněné předchozím hledáním – ekvivalent anonymního okna.</li>
+      <li><strong>Zdroje:</strong> hlavní je Google Flights (agreguje aerolinky i prodejce). Azair.eu je experimentální doplněk. U každé nabídky jsou odkazy na Google Flights, Kiwi, Skyscanner, Kayak a Azair s předvyplněnými daty – tam letenku najdeš a koupíš.</li>
+      <li><strong>Skóre = efektivní cena v Kč:</strong> cena + penalizace za čas nad 14 h, za 2. a další přestup, za dlouhé (&gt;5 h) nebo rizikově krátké (&lt;1 h) přestupy ± korekce za aerolinku. Přímý let má bonus. Čím nižší, tím lepší. Váhy jsou v <code>config.yaml</code>.</li>
+      <li><strong>Pozor:</strong> zobrazená cena je za zpáteční letenku pro 1 dospělého a itinerář je pro cestu tam; zpáteční spoj si vybereš na webu. Ceny se mohou lišit podle trhu/měny a mění se v řádu hodin – před koupí vždy ověř přes odkaz. Některé termíny (hlavně konec září 2027) aerolinky teprve otevírají, takže se nabídky budou postupně doplňovat.</li>
+    </ul>
+  </section>
+</main>
+<footer class="wrap muted small">Data: <code>data/latest.json</code> · historie: <code>data/history/</code> · zdroj: repozitář sypacc/thajland</footer>
+
+<script src="data/latest.js"></script>
+<script src="data/series.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

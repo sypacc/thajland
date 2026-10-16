@@ -1,0 +1,128 @@
+name: Sken letenek do Thajska
+
+on:
+  schedule:
+    # Denně v 04:17 UTC (06:17 letního / 05:17 zimního času v ČR). GitHub cron = UTC.
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Omezit počet dotazů (test), prázdné = plný běh"
+        required: false
+        default: ""
+      source:
+        description: "Jen jeden zdroj (google|azair), prázdné = všechny"
+        required: false
+        default: ""
+
+concurrency:
+  group: scan
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  scan:
+    name: Stáhnout ceny a aktualizovat data
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalace závislostí
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Testy
+        run: pip install pytest && python -m pytest -q tests
+
+      - name: Sken (každý dotaz = čistý požadavek bez cookies, tj. "anonymní okno")
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.limit }}" ]; then ARGS="$ARGS --limit ${{ github.event.inputs.limit }}"; fi
+          if [ -n "${{ github.event.inputs.source }}" ]; then ARGS="$ARGS --source ${{ github.event.inputs.source }}"; fi
+          python -m scanner.run $ARGS
+
+      - name: Shrnutí běhu
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          p = pathlib.Path("data/latest.json")
+          if not p.exists():
+              print("Žádná data."); raise SystemExit
+          d = json.loads(p.read_text())
+          s = d["stats"]
+          print(f"## Sken {d['day']}\n")
+          print(f"- dotazů OK: **{s['queries_ok']}** / {s['queries_total']} (chyb {s['queries_error']}, přeskočeno {s['queries_skipped']}, převzato z minula {s['queries_stale']})")
+          print(f"- nabídek: {s['offers']}, nejnižší cena: **{s['min_price']} {d['config']['currency']}** / os., medián minim: {s['median_min_price']}")
+          print(f"- trvání: {s['duration_s']} s, Google vypnut pro blokaci: {s['google_disabled']}\n")
+          top = sorted([o for o in d["offers"] if o.get("score") is not None], key=lambda o: o["score"])[:10]
+          if top:
+              print("| skóre | cena/os | trasa | odlet | návrat | aerolinky | přestupy |")
+              print("|---|---|---|---|---|---|---|")
+              for o in top:
+                  print(f"| {o['score']} | {o['price']} | {o['route']} | {o['depart_date']} | {o['return_date']} | {', '.join(o['airlines'])} | {o['stops']} |")
+          PY
+
+      - name: Commit dat
+        id: commit
+        if: always()
+        run: |
+          git config user.name "thajland-bot"
+          git config user.email "thajland-bot@users.noreply.github.com"
+          git add -A data
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Žádná změna dat."
+          else
+            git commit -m "data: sken $(date -u +%Y-%m-%d)"
+            git pull --rebase origin "${GITHUB_REF_NAME}" || true
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sestavit web
+        if: always()
+        run: |
+          rm -rf _site && mkdir -p _site
+          cp index.html _site/
+          cp -r assets _site/
+          mkdir -p _site/data && cp data/*.json data/*.js _site/data/ 2>/dev/null || true
+          touch _site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        if: always()
+        with:
+          path: _site
+
+  deploy:
+    name: Publikovat dashboard (GitHub Pages)
+    needs: scan
+    if: always()
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - id: deployment
+        uses: actions/deploy-pages@v4

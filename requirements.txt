@@ -1,0 +1,4 @@
+fast-flights==3.1.0
+pyyaml>=6.0
+requests>=2.32
+selectolax>=0.3
