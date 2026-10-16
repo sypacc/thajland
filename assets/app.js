@@ -81,7 +81,7 @@
   function routeVerdict(r) {
     const hist = routeHistory(r).filter((x) => x != null);
     const cur = Math.min(...fresh.filter((o) => o._rk === r).map((o) => o.price), Infinity);
-    if (!isFinite(cur)) return { state: "none", label: "bez nabídek", cur: null, days: hist.length };
+    if (!isFinite(cur)) return { state: "none", label: "Google zatím nenabízí žádné spojení · hlídáme dál", cur: null, days: hist.length };
     const med = median(hist), allMin = hist.length ? Math.min(...hist) : cur;
     if (hist.length < 5) return { state: "info", label: `sbíráme data (${hist.length}/5 dní)`, cur, days: hist.length, med };
     if (cur <= allMin && cur <= med * 0.92) return { state: "good", label: `dobrá chvíle na nákup · ${Math.round((1 - cur / med) * 100)} % pod obvyklou cenou`, cur, days: hist.length, med };
@@ -185,6 +185,12 @@
       const minOf = (d) => Math.min(...Object.values(d.routes).map((r) => r.min).filter((x) => x != null));
       const first = minOf(days[Math.max(0, days.length - 8)]), last = minOf(days[days.length - 1]);
       if (isFinite(first) && isFinite(last)) { const pct = (last - first) / first * 100; out.push(Math.abs(pct) < 3 ? `Za posledních ${Math.min(7, days.length - 1)} dní je nejnižší cena stabilní (${czk(last)}).` : pct < 0 ? `Nejnižší cena za posledních ${Math.min(7, days.length - 1)} dní <strong>klesla o ${Math.abs(pct).toFixed(0)} %</strong> (${czk(first)} → ${czk(last)}).` : `Nejnižší cena za posledních ${Math.min(7, days.length - 1)} dní <strong>vzrostla o ${pct.toFixed(0)} %</strong> (${czk(first)} → ${czk(last)}).`); }
+    }
+    // trasy úplně bez nabídek
+    for (const r of routeOrder) if (!fresh.some((o) => o._rk === r)) {
+      const [o, d] = r.split("→");
+      const alt = routeOrder.filter((x) => x !== r && fresh.some((q) => q._rk === x) && x.endsWith("→" + d)).map(routeName);
+      out.push(`<strong>${routeName(r)}</strong>: Google pro tyto termíny zatím nenabízí žádné spojení (ani s přestupy). Sken to kontroluje denně${alt.length ? `; mezitím srovnej ${alt.join(" / ")}` : ""}${d === "HKT" ? " nebo let do Bangkoku a vnitrostátní přelet (≈ 1 500–3 000 Kč)" : ""}.`);
     }
     // pokrytí
     const sep = coverage.find((c) => c.month === 9);
@@ -324,7 +330,7 @@
       for (const d of planDates) {
         const k = `${r}|${d}`; const v = cellMin[k]; const st = cellStatus[k];
         let c;
-        if (v == null) c = el("div", { class: "cell " + (st === "empty" ? "nosale" : "none"), title: st === "empty" ? `${routeName(r)} ${dcz(d)}: bez nabídek (prodej zřejmě ještě není otevřený)` : `${routeName(r)} ${dcz(d)}: nezjištěno` }, st === "empty" ? "·" : "?");
+        if (v == null) c = el("div", { class: "cell " + (st === "empty" ? "nosale" : "none"), title: st === "empty" ? `${routeName(r)} ${dcz(d)}: Google zatím nenabízí žádné spojení (typicky ještě neotevřený prodej)` : `${routeName(r)} ${dcz(d)}: nezjištěno (dotaz neproběhl)` }, st === "empty" ? "·" : "?");
         else {
           const p = hi > lo ? 90 - ((v - lo) / (hi - lo)) * 80 : 50;
           c = el("div", { class: "cell" + (p > 55 ? " dark" : "") + (cellStale[k] ? " stale" : "") + (v === globalMin ? " min" : ""), style: `--p:${p.toFixed(0)}%`, title: `${routeName(r)} · odlet ${dcz(d)}: od ${czk(v)}/os${cellStale[k] ? " (starší data)" : ""}` }, kcs(v));
@@ -337,7 +343,7 @@
     }
     box.append(table);
     const L = $("#calendarLegend"); L.innerHTML = "";
-    L.append("Cena v tisících Kč/os: nejlevnější", el("i", { class: "ramp" }), "nejdražší", el("span", { style: "--c:transparent; margin-left:14px" }, "· = bez nabídek (prodej neotevřen)"), el("span", { style: "--c:transparent" }, "★ = nejnižší cena skenu"), el("span", { style: "--c:transparent" }, "bledé = starší data"));
+    L.append("Cena v tisících Kč/os: nejlevnější", el("i", { class: "ramp" }), "nejdražší", el("span", { style: "--c:transparent; margin-left:14px" }, "· = Google zatím nenabízí spojení (typicky neotevřený prodej)"), el("span", { style: "--c:transparent" }, "★ = nejnižší cena skenu"), el("span", { style: "--c:transparent" }, "bledé = starší data"));
   }
   function renderCalendarDetail(r, d) {
     const box = $("#calendarDetail");
