@@ -15,6 +15,7 @@ import sys
 import time
 from typing import Any
 
+from . import alerts as alerts_mod
 from . import storage
 from .config import Config, load_config
 from .model import Offer
@@ -175,6 +176,11 @@ def run(cfg: Config, *, limit: int | None = None, only_source: str | None = None
         d["stale"] = bool(getattr(o, "_stale", False))
         offer_dicts.append(d)
 
+    # Experimentální: prodejci (aerolinka / cestovky) pro nejlepší dealy
+    enrich_n = int(scan.get("enrich_sellers_top", 0)) if scan.get("enrich_sellers") else 0
+    if enrich_n and not google_disabled and offer_dicts:
+        _enrich_sellers(offer_dicts, enrich_n, budget_s - (time.monotonic() - started))
+
     ok = [q for q in queries if q["status"] == "ok" and not q.get("stale")]
     prices = [q["min_price"] for q in queries if q.get("min_price")]
     stats = {
@@ -205,6 +211,37 @@ def run(cfg: Config, *, limit: int | None = None, only_source: str | None = None
     return payload
 
 
+def _enrich_sellers(offer_dicts: list[dict[str, Any]], n: int, remaining_s: float) -> None:
+    if remaining_s < 120:
+        log.info("Prodejci: přeskočeno (vyčerpaný časový rozpočet)")
+        return
+    fresh = [o for o in offer_dicts if o["source"] == "google" and not o.get("stale") and o.get("score") is not None]
+    fresh.sort(key=lambda o: o["score"])
+    seen: set[str] = set()
+    picked = []
+    for o in fresh:
+        if o["id"] in seen:
+            continue
+        seen.add(o["id"])
+        picked.append(o)
+        if len(picked) >= n:
+            break
+    t0 = time.monotonic()
+    for o in picked:
+        if time.monotonic() - t0 > min(remaining_s - 60, 600):
+            break
+        try:
+            sellers, err = google_flights.fetch_sellers(o["links"]["google"], o["price"],
+                                                        (o.get("airlines") or [None])[0])
+        except Exception as e:  # noqa: BLE001
+            sellers, err = [], f"{type(e).__name__}: {e}"
+        o["sellers"] = sellers
+        o["sellers_error"] = err
+        log.info("Prodejci %s %s %s: %s", o["route"], o["depart_date"], o["price"],
+                 ", ".join(f"{x['name']} {x['price']}" for x in sellers) or err)
+        time.sleep(2)
+
+
 def _offer_from_dict(d: dict[str, Any]) -> Offer:
     from .model import Layover, Leg
     o = Offer(
@@ -229,6 +266,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--source", default=None, choices=["google", "azair"])
     ap.add_argument("--no-shuffle", action="store_true")
     ap.add_argument("--no-save", action="store_true")
+    ap.add_argument("--no-notify", action="store_true", help="hlášení jen uložit, neposílat")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args(argv)
 
@@ -241,9 +279,22 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.no_save:
         return 0
+    # Hlášení (dealy) – počítá se proti historii BEZ dnešního dne
+    history = [h for h in storage.load_history() if h.get("day") != payload["day"]]
+    existing = alerts_mod.load_alerts()
+    new_alerts = alerts_mod.detect(payload, history, cfg.raw.get("alerts", {}), existing)
+    payload["alerts_today"] = new_alerts
+    log.info("Hlášení: %d nových", len(new_alerts))
+    for a in new_alerts:
+        log.info("  %s %s %s→%s %s: %s", a["kind_label"], a["price"], a["origin"], a["destination"],
+                 a["depart_date"], a["reason"])
+
     storage.save_latest(payload)
     storage.save_history_snapshot(payload["day"], payload["queries"])
     storage.save_series(storage.build_series(storage.load_history()))
+    alerts_mod.save_alerts(existing + new_alerts)
+    if new_alerts and not args.no_notify:
+        alerts_mod.notify(new_alerts, payload, cfg.raw.get("alerts", {}).get("channels", {}))
     # Neúspěch celého běhu = vůbec žádná data (např. blokace). Jinak 0.
     return 0 if st["queries_ok"] or st["queries_stale"] else 2
 

@@ -20,6 +20,23 @@
 <main class="wrap">
   <section id="kpis" class="kpis" aria-label="Souhrn"></section>
 
+  <section class="panel" id="alertsPanel">
+    <h2>Hlášení <span class="muted">(abnormálně nízké ceny a zajímavé dealy)</span></h2>
+    <p class="muted small">Co sken považuje za deal: cena pod cílovou hranicí, prudký pokles od minulého běhu, cena výrazně pod mediánem historie daného termínu, nové minimum trasy. Hranice jsou v <code>config.yaml</code> → <code>alerts</code>.</p>
+    <div id="alerts" class="alerts"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Co se děje s cenou <span class="muted">(po trasách)</span></h2>
+    <p class="muted small">Nejlevnější nalezená letenka na trase v jednotlivých bězích. Sparkline = celá historie měření.</p>
+    <div class="table-wrap">
+      <table id="overview">
+        <thead><tr><th>Trasa</th><th>Dnes</th><th>vs. minule</th><th>vs. 7 dní</th><th>vs. 30 dní</th><th>Minimum dosud</th><th>Maximum dosud</th><th>Vývoj</th><th>Verdikt</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
   <section class="panel">
     <h2>Filtry</h2>
     <div id="filters" class="filters"></div>
@@ -69,7 +86,8 @@
     <ul>
       <li><strong>Kdy:</strong> GitHub Action běží každý den ráno a projde všechny kombinace odlet × délka × letiště z <code>config.yaml</code>.</li>
       <li><strong>Anonymně:</strong> každý dotaz je čistý požadavek bez cookies a historie (čerstvý runner), takže ceny nejsou ovlivněné předchozím hledáním – ekvivalent anonymního okna.</li>
-      <li><strong>Zdroje:</strong> hlavní je Google Flights (agreguje aerolinky i prodejce). Azair.eu je experimentální doplněk. U každé nabídky jsou odkazy na Google Flights, Kiwi, Skyscanner, Kayak a Azair s předvyplněnými daty – tam letenku najdeš a koupíš.</li>
+      <li><strong>Zdroje a cestovky:</strong> hlavní je Google Flights, který porovnává aerolinky i prodejce (Kiwi, eDreams, Gotogate, Mytrip, Expedia a další) a ukazuje nejnižší cenu. U nejlepších dealů se navíc načítají „Možnosti rezervace“ = u koho a za kolik se dá koupit (experimentální). Azair.eu je doplňkový zdroj. Kiwi, Skyscanner, Pelikán ani Letuška nejdou automaticky číst (blokují roboty, nemají veřejné API), proto jsou u každé nabídky odkazy s předvyplněnými daty (Google Flights, Kiwi, Skyscanner, Kayak, Azair) a odkazy na Pelikán a Letušku pro ruční ověření.</li>
+      <li><strong>Hlášení:</strong> nové dealy se zapisují do <code>data/alerts.json</code>, zobrazují tady a posílají jako GitHub issue (= notifikace/e-mail z GitHubu). Volitelně Telegram, ntfy (push do mobilu) nebo e-mail přes SMTP – stačí nastavit secrets, viz README.</li>
       <li><strong>Skóre = efektivní cena v Kč:</strong> cena + penalizace za čas nad 14 h, za 2. a další přestup, za dlouhé (&gt;5 h) nebo rizikově krátké (&lt;1 h) přestupy ± korekce za aerolinku. Přímý let má bonus. Čím nižší, tím lepší. Váhy jsou v <code>config.yaml</code>.</li>
       <li><strong>Pozor:</strong> zobrazená cena je za zpáteční letenku pro 1 dospělého a itinerář je pro cestu tam; zpáteční spoj si vybereš na webu. Ceny se mohou lišit podle trhu/měny a mění se v řádu hodin – před koupí vždy ověř přes odkaz. Některé termíny (hlavně konec září 2027) aerolinky teprve otevírají, takže se nabídky budou postupně doplňovat.</li>
     </ul>
@@ -79,6 +97,7 @@
 
 <script src="data/latest.js"></script>
 <script src="data/series.js"></script>
+<script src="data/alerts.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>

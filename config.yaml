@@ -35,6 +35,10 @@ scan:
     azair: true
   # Když selže primp fetch Google Flights, zkusí se headless Chromium (Playwright) v anonymním kontextu.
   playwright_fallback: true
+  # Experimentální: pro N nejlepších dealů otevřít Google Flights v headless Chromiu
+  # a přečíst "Možnosti rezervace" = u koho (aerolinka / cestovka) a za kolik se dá koupit.
+  enrich_sellers: true
+  enrich_sellers_top: 8
 
 # Skóre "cena/výkon": ke skutečné ceně přičítáme "virtuální" náklady za nepohodlí.
 # Výsledek = efektivní cena v Kč; čím nižší, tím lepší nabídka.
@@ -90,3 +94,28 @@ scoring:
     "Kuwait Airways": 800
     "Gulf Air": 300
     "SriLankan": 300
+
+# Hlášení (alerty) – kdy považovat nabídku za abnormálně nízkou / zajímavý deal.
+alerts:
+  enabled: true
+  # Cílová cena za osobu: cokoliv pod ní hlásíme vždy ("deal").
+  target_price: 15000
+  # Prudký pokles proti předchozímu běhu (stačí splnit jedno).
+  drop_pct: 12
+  drop_czk: 2500
+  # Abnormálně nízko: o X % pod mediánem historických minim daného termínu (potřeba min. N běhů).
+  anomaly_pct: 15
+  anomaly_min_days: 5
+  # Nové historické minimum celé trasy (potřeba min. N běhů).
+  route_low_min_days: 3
+  # Max. počet hlášení za jeden běh (nejlepší podle závažnosti a skóre).
+  max_per_run: 8
+  # Stejný termín neopakovat dřív než za N dní, pokud cena neklesla o dalších X Kč.
+  dedupe_days: 7
+  dedupe_improve_czk: 500
+  # Kanály: posílá se jen tam, kde jsou nastavené secrets (viz README).
+  channels:
+    github_issue: true   # issue v repu -> GitHub notifikace / e-mail (funguje bez nastavení)
+    telegram: true       # TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID
+    ntfy: true           # NTFY_TOPIC (push do mobilu přes ntfy.sh)
+    email: true          # SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, ALERT_EMAIL_TO

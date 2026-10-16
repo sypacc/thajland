@@ -20,6 +20,36 @@ a dashboard, který ukazuje nejlepší příležitosti podle **poměru cena/výk
    odletu a vývoje v čase, tabulka všech nabídek s filtry, detail itineráře (přestupy, časy),
    a u každé nabídky odkazy na **Google Flights, Kiwi.com, Skyscanner, Kayak a Azair** s předvyplněnými daty.
 
+## Hlášení dealů (alerty)
+
+Po každém běhu se nabídky porovnají s historií a vzniknou hlášení (`data/alerts.json`, sekce „Hlášení“ v dashboardu):
+
+| typ | kdy |
+|---|---|
+| pod cílovou cenou | cena/os ≤ `alerts.target_price` (výchozí 15 000 Kč) |
+| prudký pokles | o ≥ 12 % nebo ≥ 2 500 Kč levnější než v předchozím běhu |
+| abnormálně nízko | ≥ 15 % pod mediánem historických minim daného termínu (po ≥ 5 bězích) |
+| nové minimum trasy | nejnižší cena na trase za celou historii (po ≥ 3 bězích) |
+
+Jedna nabídka = jedno hlášení se všemi důvody, max. 8 za běh, stejný termín se neopakuje 7 dní (pokud neklesne o dalších 500 Kč).
+
+**Kam se hlášení posílá** (zapnuto v `config.yaml` → `alerts.channels`, kanál se použije jen když existuje secret
+v Settings → Secrets and variables → Actions):
+
+- **GitHub issue** – funguje bez nastavení, GitHub pošle notifikaci/e-mail (issue má label `deal`).
+- **Telegram** – secrets `TELEGRAM_BOT_TOKEN` (od @BotFather) a `TELEGRAM_CHAT_ID`.
+- **ntfy** (push do mobilu) – secret `NTFY_TOPIC`, v aplikaci ntfy odebírej stejný topic.
+- **E-mail** – secrets `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `ALERT_EMAIL_TO`.
+
+## Cestovky a prodejci
+
+- Google Flights porovnává aerolinky i prodejce (Kiwi, eDreams, Gotogate, Mytrip, Expedia…) a vrací nejnižší cenu.
+- Pro nejlepší dealy (výchozí 8) se navíc headless prohlížečem načtou **„Možnosti rezervace“** = seznam prodejců
+  a jejich cen (experimentální, `scan.enrich_sellers`). V dashboardu je to řádek „Kde koupit“.
+- Kiwi.com, Skyscanner, Pelikán ani Letuška nemají veřejné API a blokují roboty, takže se automaticky nečtou.
+  U každé nabídky jsou odkazy s předvyplněným termínem (Google Flights, Kiwi, Skyscanner, Kayak, Azair) a odkazy
+  na Pelikán/Letušku pro ruční ověření.
+
 ## Zprovoznění (jednorázově)
 
 1. Repo musí mít tuto větev jako **výchozí** (plánované běhy `schedule` GitHub spouští jen z výchozí větve).
@@ -45,6 +75,7 @@ Dashboard čte `data/latest.js` a `data/series.js`, funguje i otevřený přímo
 
 - **Letiště, termíny, délka pobytu, počet cestujících** → `config.yaml` → `trip`.
 - **Váhy skóre** (co je pro vás „výkon“) → `config.yaml` → `scoring`.
+- **Hranice hlášení** (cílová cena, % poklesu, počet hlášení) → `config.yaml` → `alerts`.
 - **Čas běhu** → `.github/workflows/scan.yml` → `cron` (UTC).
 - **Rychlost/šetrnost** k Google → `scan.delay_seconds`, `scan.time_budget_minutes`. Dotazy, které se
   nestihnou nebo selžou, se převezmou z předchozího běhu a v dashboardu jsou označeny jako „starší data“.

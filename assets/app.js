@@ -3,6 +3,7 @@
   "use strict";
   const LATEST = window.THAJLAND_LATEST || null;
   const SERIES = window.THAJLAND_SERIES || { days: [] };
+  const ALERTS = (window.THAJLAND_ALERTS && window.THAJLAND_ALERTS.alerts) || [];
   const $ = (s) => document.querySelector(s);
   const el = (tag, attrs, ...kids) => {
     const n = document.createElement(tag);
@@ -21,7 +22,7 @@
   const CITY = { PRG: "Praha", VIE: "Vídeň", BUD: "Budapešť", BRQ: "Brno", MUC: "Mnichov", BER: "Berlín",
     BKK: "Bangkok", DMK: "Bangkok (DMK)", HKT: "Phuket", CNX: "Chiang Mai", USM: "Ko Samui", KBV: "Krabi" };
   const city = (c) => CITY[c] || c;
-  const LINK_NAMES = { google: "Google Flights", kiwi: "Kiwi.com", skyscanner: "Skyscanner", kayak: "Kayak", azair: "Azair" };
+  const LINK_NAMES = { google: "Google Flights", kiwi: "Kiwi.com", skyscanner: "Skyscanner", kayak: "Kayak", azair: "Azair", pelikan: "Pelikán (ručně)", letuska: "Letuška (ručně)" };
   const SERIES_VARS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6"];
   const cssVar = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
@@ -115,6 +116,83 @@
     return Object.entries(o.score_breakdown || {}).map(([k, v]) => `${names[k] || k} ${v > 0 && k !== "price" ? "+" : ""}${Math.round(v).toLocaleString("cs-CZ")}`).join(" · ");
   };
 
+  const sparkline = (vals, w = 120, h = 28) => {
+    const v = vals.filter((x) => x != null);
+    if (v.length < 2) return el("span", { class: "muted small" }, v.length ? "1 měření" : "–");
+    const min = Math.min(...v), max = Math.max(...v), span = max - min || 1;
+    const pts = vals.map((x, i) => x == null ? null : [2 + (i / (vals.length - 1)) * (w - 4), h - 3 - ((x - min) / span) * (h - 6)]);
+    const d = pts.filter(Boolean).map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    const last = pts.filter(Boolean).pop();
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "spark"); svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svg.innerHTML = `<title>${v.map((x) => czk(x)).join(", ")}</title><path d="${d}"/><circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.5"/>`;
+    return svg;
+  };
+  const queryHistory = (o) => (SERIES.days || []).map((d) => {
+    const r = (d.queries || []).find((q) => q[0] === o.origin && q[1] === o.destination && q[2] === o.depart_date && q[3] === o.return_date && q[4] === o.source);
+    return r ? r[5] : null;
+  });
+  const sellersRow = (o) => {
+    if (!o.sellers || !o.sellers.length) return o.sellers_error ? el("div", { class: "sellers muted" }, "Prodejci: nepodařilo se načíst (" + o.sellers_error + ")") : null;
+    const items = [...o.sellers].sort((a, b) => a.price - b.price).slice(0, 8).map((x, i) => el("span", null, i ? " · " : "", i === 0 ? el("strong", null, `${x.name} ${czk(x.price)}`) : `${x.name} ${czk(x.price)}`));
+    return el("div", { class: "sellers" }, "Kde koupit (Google Flights): ", ...items);
+  };
+
+  // ---------- alerts ----------
+  function renderAlerts() {
+    const box = $("#alerts"); box.innerHTML = "";
+    if (!ALERTS.length) { box.append(el("div", { class: "empty" }, "Zatím žádné hlášení. Dealy se začnou objevovat, až bude k dispozici pár dní historie, nebo když cena spadne pod cílovou hranici.")); return; }
+    const today = LATEST.day;
+    ALERTS.slice(0, 15).forEach((a) => box.append(el("div", { class: "alert " + (a.severity || "") },
+      el("div", { class: "price" }, czk(a.price), el("span", { class: "muted small" }, " /os")),
+      el("div", { class: "when" }, (a.day === today ? "dnes" : dcz(a.day)) + " · " + (a.kind_label || a.kind)),
+      el("div", { class: "body" },
+        el("div", { class: "title" }, `${city(a.origin)} → ${city(a.destination)} · ${dcz(a.depart_date)} – ${dcz(a.return_date)} (${a.nights} dní) · ${(a.airlines || []).join(", ") || "–"} · ${a.stops === 0 ? "přímý" : a.stops === 1 ? "1 přestup" : a.stops + " přestupy"}`),
+        el("div", { class: "reason" }, a.reason),
+        el("div", { class: "links" }, Object.entries(a.links || {}).slice(0, 5).map(([k, u]) => el("a", { href: u, target: "_blank", rel: "noopener" }, LINK_NAMES[k] || k)))))));
+    if (ALERTS.length > 15) box.append(el("div", { class: "muted small" }, `… a dalších ${ALERTS.length - 15} starších v data/alerts.json`));
+  }
+
+  // ---------- price overview per route ----------
+  function renderOverview() {
+    const tb = $("#overview tbody"); tb.innerHTML = "";
+    const days = SERIES.days || [];
+    if (!days.length) { tb.append(el("tr", null, el("td", { colspan: "9", class: "empty" }, "Zatím žádná historie."))); return; }
+    const last = days[days.length - 1];
+    const dayDate = (d) => new Date(d.day + "T00:00:00Z");
+    const back = (n) => { const target = dayDate(last).getTime() - n * 864e5; let best = null; for (const d of days) if (dayDate(d).getTime() <= target) best = d; return best; };
+    const prev = days.length >= 2 ? days[days.length - 2] : null, d7 = back(7), d30 = back(30);
+    const rk = (r) => r.replace("→", "-");
+    const delta = (now, then) => {
+      if (now == null || then == null) return el("td", { class: "muted" }, "–");
+      const diff = now - then, pct = then ? (diff / then) * 100 : 0;
+      return el("td", { class: "num " + (diff < 0 ? "trend-down" : diff > 0 ? "trend-up" : "") }, `${diff > 0 ? "+" : ""}${czk(diff)} (${pct > 0 ? "+" : ""}${pct.toFixed(0)} %)`);
+    };
+    for (const r of routeOrder) {
+      const k = rk(r);
+      const series = days.map((d) => (d.routes[k] || {}).min ?? null);
+      if (!series.some((x) => x != null)) continue;
+      const now = series[series.length - 1];
+      let minV = Infinity, minD = null, maxV = -Infinity, maxD = null;
+      days.forEach((d, i) => { const v = series[i]; if (v == null) return; if (v < minV) { minV = v; minD = d.day; } if (v > maxV) { maxV = v; maxD = d.day; } });
+      const ref = d7 ? (d7.routes[k] || {}).min : prev ? (prev.routes[k] || {}).min : null;
+      let verdict = el("td", { class: "verdict-flat" }, days.length < 2 ? "málo dat" : "stabilní");
+      if (now != null && ref != null) {
+        const pct = ((now - ref) / ref) * 100;
+        if (pct <= -3) verdict = el("td", { class: "verdict-down" }, `klesá (${pct.toFixed(0)} %)`);
+        else if (pct >= 3) verdict = el("td", { class: "verdict-up" }, `roste (+${pct.toFixed(0)} %)`);
+      }
+      if (now != null && now <= minV && days.length >= 3) verdict.append(" · na minimu ★");
+      tb.append(el("tr", null,
+        el("td", null, el("span", { style: `color:${routeColor(r)}` }, "● "), `${city(r.split("→")[0])} → ${city(r.split("→")[1])}`),
+        el("td", { class: "num" }, el("strong", null, czk(now))),
+        delta(now, prev ? (prev.routes[k] || {}).min : null), delta(now, d7 ? (d7.routes[k] || {}).min : null), delta(now, d30 ? (d30.routes[k] || {}).min : null),
+        el("td", { class: "num" }, isFinite(minV) ? `${czk(minV)} (${dshort(minD)})` : "–"),
+        el("td", { class: "num" }, isFinite(maxV) ? `${czk(maxV)} (${dshort(maxD)})` : "–"),
+        el("td", null, sparkline(series)), verdict));
+    }
+  }
+
   // ---------- KPIs ----------
   function renderKpis(list) {
     const k = $("#kpis"); k.innerHTML = "";
@@ -145,7 +223,8 @@
       el("div", { class: "head" }, el("div", { class: "price" }, czk(o.price), el("span", { class: "muted small" }, ` /os · ${czk(o.price * travelers)} pro ${travelers}`)), el("div", { class: "rank" }, `#${i + 1} · skóre ${czk(o.score)}`)),
       el("div", { class: "route" }, `${city(o.origin)} → ${city(o.destination)}  ·  ${o.route}`),
       el("div", { class: "meta" }, `${dcz(o.depart_date)} – ${dcz(o.return_date)} (${o.nights} dní) · tam ${dur(o.duration_min)} · ${o.airlines.join(", ") || "–"}`),
-      badges(o), legList(o), linkRow(o),
+      badges(o), legList(o), sellersRow(o),
+      el("div", { class: "small muted" }, "Vývoj ceny termínu: ", sparkline(queryHistory(o))), linkRow(o),
     )));
   }
 
@@ -211,7 +290,8 @@
       tb.append(tr);
       btn.addEventListener("click", () => {
         if (tr.nextSibling && tr.nextSibling.classList.contains("detail")) { tr.nextSibling.remove(); return; }
-        const d = el("tr", { class: "detail" }, el("td", { colspan: "12" }, badges(o), legList(o) || "", el("div", { class: "small muted" }, "Skóre: " + breakdown(o)), linkRow(o)));
+        const d = el("tr", { class: "detail" }, el("td", { colspan: "12" }, badges(o), legList(o) || "", sellersRow(o) || "",
+          el("div", { class: "small muted" }, "Skóre: " + breakdown(o)), el("div", { class: "small muted" }, "Vývoj ceny tohoto termínu: ", sparkline(queryHistory(o))), linkRow(o)));
         tr.after(d);
       });
     });
@@ -237,6 +317,8 @@
     renderKpis(list); renderTop(list); renderChartDates(list); renderTable(list);
   }
   renderRunInfo();
+  renderAlerts();
+  renderOverview();
   renderChartHistory();
   render();
   if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { render(); renderChartHistory(); });

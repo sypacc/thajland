@@ -77,4 +77,8 @@ def build_links(origin: str, dest: str, depart: str, ret: str, adults: int = 1,
     }
     links["azair"] = "https://www.azair.eu/azfin.php?" + urlencode(az)
 
+    # České cestovky bez sdílitelných URL vyhledávání – odkaz na vyhledávač, termín zadáš ručně.
+    links["pelikan"] = "https://www.pelikan.cz/cs/letenky"
+    links["letuska"] = "https://www.letuska.cz/"
+
     return links
