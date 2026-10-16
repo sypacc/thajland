@@ -26,7 +26,7 @@ scan:
   retries: 3
   # Pojistka proti nekonečným běhům.
   max_queries: 400
-  time_budget_minutes: 45
+  time_budget_minutes: 75
   # Kolik nabídek z každého dotazu uložit (seřazeno podle skóre).
   keep_per_query: 6
   # Zdroje: google = Google Flights (hlavní), azair = Azair.eu (experimentální, levné kombinace)

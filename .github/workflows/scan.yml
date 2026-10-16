@@ -67,6 +67,30 @@ jobs:
           if [ -n "${{ github.event.inputs.source }}" ]; then ARGS="$ARGS --source ${{ github.event.inputs.source }}"; fi
           python -m scanner.run $ARGS
 
+      - name: Ladicí report (do logu)
+        if: always()
+        run: |
+          python - <<'PY'
+          import pathlib, re
+          d = pathlib.Path("debug")
+          if not d.exists():
+              print("bez ladicích souborů"); raise SystemExit
+          for f in sorted(d.iterdir()):
+              print(f"=== {f.name} ({f.stat().st_size} B)")
+              if f.suffix == ".txt":
+                  print(f.read_text(errors="ignore")[:2500])
+              elif f.suffix == ".html":
+                  h = f.read_text(errors="ignore")
+                  t = re.search(r"<title>(.*?)</title>", h, re.S)
+                  print("title:", (t.group(1).strip() if t else "?"))
+                  classes = sorted(set(re.findall(r'class="([^"]{1,40})"', h)))
+                  print("classes:", classes[:80])
+                  print("meta refresh:", bool(re.search(r"http-equiv=.refresh", h, re.I)), "| scripts:", len(re.findall(r"<script", h)))
+                  txt = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", h, flags=re.S | re.I)
+                  txt = re.sub(r"<[^>]+>", " ", txt); txt = re.sub(r"\s+", " ", txt)
+                  print("text:", txt[:1500])
+          PY
+
       - name: Shrnutí běhu
         if: always()
         run: |

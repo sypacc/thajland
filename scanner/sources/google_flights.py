@@ -15,9 +15,12 @@ import time
 from pathlib import Path
 from typing import Any
 
+import json
+
 from fast_flights import FlightQuery, Passengers, create_query, fetch_flights_html
 from fast_flights.exceptions import FlightsNotFound
-from fast_flights.parser import parse as parse_html
+from fast_flights.model import Airport, CarbonEmission, Flights, SimpleDatetime, SingleFlight
+from fast_flights.parser import ResultList, _parse_time
 
 from ..links import build_links
 from ..model import Layover, Leg, Offer
@@ -30,6 +33,64 @@ class GoogleBlocked(RuntimeError):
 
 
 _DEBUG_COUNT = {"n": 0}
+
+
+def parse_html(html: str) -> ResultList:
+    """Tolerantní verze parseru fast-flights: vadná položka se přeskočí místo pádu celého dotazu.
+
+    Google vrací dva seznamy (payload[2] = 'nejlepší', payload[3] = 'ostatní'); bereme oba.
+    """
+    from selectolax.lexbor import LexborHTMLParser
+
+    parser = LexborHTMLParser(html)
+    script = parser.css_first(r"script.ds\:1")
+    if script is None:
+        raise ValueError("stránka neobsahuje data (script.ds:1) – consent/captcha/blokace?")
+    js = script.text()
+    data = js.split("data:", 1)[1].rsplit(",", 1)[0]
+    if data.endswith("errorHasStatus: true"):
+        raise FlightsNotFound("no flights found; received error")
+    payload = json.loads(data)
+
+    flights = ResultList()
+    seen: set[tuple] = set()
+    skipped = 0
+    for idx in (2, 3):
+        try:
+            lst = payload[idx][0]
+        except (IndexError, TypeError):
+            lst = None
+        if not lst:
+            continue
+        for k in lst:
+            try:
+                flight = k[0]
+                price = k[1][0][1]
+                legs = []
+                for sf in flight[2]:
+                    legs.append(SingleFlight(
+                        from_airport=Airport(code=sf[3], name=sf[4]),
+                        to_airport=Airport(code=sf[6], name=sf[5]),
+                        departure=SimpleDatetime(date=tuple(sf[20]), time=_parse_time(sf[8])),
+                        arrival=SimpleDatetime(date=tuple(sf[21]), time=_parse_time(sf[10])),
+                        duration=sf[11] or 0, plane_type=sf[17] or "",
+                    ))
+                key = (price, tuple((l.from_airport.code, l.departure.date, l.departure.time) for l in legs))
+                if key in seen:
+                    continue
+                seen.add(key)
+                extras = flight[22] if len(flight) > 22 and flight[22] else []
+                carbon = CarbonEmission(
+                    typical_on_route=(extras[8] if len(extras) > 8 and extras[8] else 0),
+                    emission=(extras[7] if len(extras) > 7 and extras[7] else 0))
+                flights.append(Flights(type=str(flight[0]), price=price, airlines=list(flight[1] or []),
+                                       flights=legs, carbon=carbon))
+            except (TypeError, IndexError, ValueError, KeyError):
+                skipped += 1
+                continue
+    if skipped:
+        log.info("parser: %d položek přeskočeno (neúplná data)", skipped)
+    return flights
 
 
 def _debug_dump(name: str, content: str | bytes, limit: int = 12) -> None:
@@ -114,7 +175,8 @@ def _fetch_html_playwright(url: str, timeout_ms: int = 45000) -> str:
 
 def search(origin: str, dest: str, depart: dt.date, ret: dt.date, *, currency: str = "CZK",
            cabin: str = "economy", max_stops: int | None = None, retries: int = 3,
-           playwright_fallback: bool = True, adults: int = 1) -> tuple[list[Offer], dict[str, Any]]:
+           playwright_fallback: bool = True, playwright_on_not_found: bool = True,
+           adults: int = 1) -> tuple[list[Offer], dict[str, Any]]:
     """Vrátí (nabídky, meta). Nabídky = odletové itineráře s celkovou cenou zpáteční letenky."""
     q = make_query(origin, dest, depart, ret, currency=currency, cabin=cabin,
                    max_stops=max_stops, adults=adults)
@@ -130,6 +192,7 @@ def search(origin: str, dest: str, depart: dt.date, ret: dt.date, *, currency: s
             html = fetch_flights_html(q)
             results = parse_html(html)
             meta["method"] = "primp"
+            meta["error"] = None
             break
         except FlightsNotFound as e:
             # Google vrací 'errorHasStatus' i při dočasné chybě / soft-blocku, ne jen bez letů.
@@ -148,7 +211,8 @@ def search(origin: str, dest: str, depart: dt.date, ret: dt.date, *, currency: s
             log.warning("google %s-%s %s: pokus %d selhal: %s", origin, dest, depart, attempt, e)
             time.sleep(min(30, 3 * attempt))
 
-    if results is None and playwright_fallback:
+    use_pw = playwright_fallback and (playwright_on_not_found or not not_found)
+    if results is None and use_pw:
         try:
             html = _fetch_html_playwright(url)
             results = parse_html(html)
@@ -163,6 +227,7 @@ def search(origin: str, dest: str, depart: dt.date, ret: dt.date, *, currency: s
             log.warning("google playwright fallback %s-%s %s selhal: %s", origin, dest, depart, e)
     elif results is None and not_found:
         results = []  # bez fallbacku: považujeme za 'bez výsledků'
+        meta["method"] = "primp"
 
     if results is None:
         meta["error"] = f"{type(last_err).__name__}: {last_err}"
@@ -205,6 +270,7 @@ def search(origin: str, dest: str, depart: dt.date, ret: dt.date, *, currency: s
                   "zpáteční let si vybereš na Google Flights."),
         ))
     meta["count"] = len(offers)
+    meta["not_found"] = bool(not_found and not offers)
     return offers, meta
 
 
@@ -243,6 +309,19 @@ def _parse_booking_options(text: str) -> list[dict[str, Any]]:
         if name and not any(s["name"] == name and s["price"] == price for s in sellers):
             sellers.append({"name": name, "price": price})
     return sellers
+
+
+def _log_page_state(page, why: str) -> None:
+    """Diagnostika do logu (artefakty nemusí být dostupné): URL, nadpisy, tlačítka, úryvek textu."""
+    try:
+        heads = page.locator("h1, h2, h3").all_inner_texts()[:12]
+        btns = [b for b in page.locator("button[aria-label]").evaluate_all(
+            "els => els.map(e => e.getAttribute('aria-label'))") if b][:15]
+        body = re.sub(r"\s+", " ", page.inner_text("body"))[:900]
+        log.info("prodejci diag (%s): url=%s | nadpisy=%s | tlačítka=%s | text=%s",
+                 why, page.url[:120], heads, btns, body)
+    except Exception as e:  # noqa: BLE001
+        log.info("prodejci diag selhala: %s", e)
 
 
 def fetch_sellers(url: str, price: int, airline_hint: str | None = None, timeout_ms: int = 45000
@@ -284,6 +363,7 @@ def fetch_sellers(url: str, price: int, airline_hint: str | None = None, timeout
                     items = hinted
             if items.count() == 0:
                 _debug_dump(f"sellers_nomatch_{price}.png", page.screenshot(full_page=True))
+                _log_page_state(page, f"cena {price_str} nenalezena")
                 return [], "itinerář s danou cenou nenalezen"
             step = "klik tam"
             target = items.first
@@ -311,6 +391,7 @@ def fetch_sellers(url: str, price: int, airline_hint: str | None = None, timeout
                 page.wait_for_selector("text=/Možnosti rezervace|Booking options/", timeout=15000)
             except Exception:
                 _debug_dump(f"sellers_nobooking_{price}.png", page.screenshot(full_page=True))
+                _log_page_state(page, "bez sekce rezervace")
                 return [], "sekce 'Možnosti rezervace' se nezobrazila"
             txt = page.inner_text("body")
             idx = max(txt.find("Možnosti rezervace"), txt.find("Booking options"))

@@ -78,6 +78,7 @@ def run(cfg: Config, *, limit: int | None = None, only_source: str | None = None
     queries: list[dict[str, Any]] = []
     consecutive_blocked = 0
     google_disabled = False
+    pw_not_found_confirmed = 0   # kolikrát Chromium potvrdilo 'bez výsledků' => dál už ho na to nevoláme
     total = len(plan) * len(sources)
     done = 0
 
@@ -108,8 +109,11 @@ def run(cfg: Config, *, limit: int | None = None, only_source: str | None = None
                     found, meta = google_flights.search(
                         origin, dest, dep, ret, currency=cfg.currency, cabin=cfg.cabin,
                         max_stops=cfg.max_stops, retries=retries,
-                        playwright_fallback=pw_fallback)
+                        playwright_fallback=pw_fallback,
+                        playwright_on_not_found=pw_not_found_confirmed < 3)
                     consecutive_blocked = 0
+                    if meta.get("not_found") and meta.get("method") == "playwright":
+                        pw_not_found_confirmed += 1
                 else:
                     found, meta = azair.search(origin, dest, dep, ret, currency=cfg.currency)
                 qrec["status"] = "ok" if not meta.get("error") else "empty"
