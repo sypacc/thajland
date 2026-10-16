@@ -54,10 +54,11 @@ v Settings → Secrets and variables → Actions):
 
 1. Repo musí mít tuto větev jako **výchozí** (plánované běhy `schedule` GitHub spouští jen z výchozí větve).
 2. **Actions → „Sken letenek do Thajska“ → Run workflow** (první běh; do pole `limit` můžeš dát např. `10` pro rychlý test).
-3. Workflow sám zapne **GitHub Pages** (zdroj „GitHub Actions“). URL dashboardu najdeš v běhu jobu
-   „Publikovat dashboard“ nebo v Settings → Pages (typicky `https://sypacc.github.io/thajland/`).
-   Pokud Pages nejde zapnout automaticky (soukromé repo na Free plánu), zapni je ručně v Settings → Pages
-   a jako zdroj zvol „GitHub Actions“ – nebo si dashboard otevři lokálně (viz níže).
+3. Dashboard se publikuje na větev `gh-pages`; u veřejného repa GitHub Pages zapne sám.
+   URL: `https://sypacc.github.io/thajland/` (první publikace trvá pár minut). Kdyby se stránka
+   neobjevila, v Settings → Pages nastav Source = „Deploy from a branch“, branch `gh-pages`, složka `/ (root)`.
+4. Po každém běhu je v Actions k dispozici artefakt `debug-N` se surovými odpověďmi (chybové stránky Google,
+   HTML Azairu, screenshoty z načítání prodejců) pro ladění.
 
 ## Lokální spuštění
 

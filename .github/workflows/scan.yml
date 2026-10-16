@@ -22,16 +22,12 @@ concurrency:
 permissions:
   contents: write
   issues: write
-  pages: write
-  id-token: write
 
 jobs:
   scan:
     name: Stáhnout ceny a aktualizovat data
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    outputs:
-      changed: ${{ steps.commit.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,6 +50,7 @@ jobs:
       - name: Sken (každý dotaz = čistý požadavek bez cookies, tj. "anonymní okno")
         env:
           PYTHONUNBUFFERED: "1"
+          THAJLAND_DEBUG_DIR: debug
           # Hlášení dealů – kanály se použijí jen když je secret nastavený (Settings → Secrets → Actions)
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -114,6 +111,15 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Ladicí výstupy (surové odpovědi Google/Azair, screenshoty)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-${{ github.run_number }}
+          path: debug/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Sestavit web
         if: always()
         run: |
@@ -123,22 +129,16 @@ jobs:
           mkdir -p _site/data && cp data/*.json data/*.js _site/data/ 2>/dev/null || true
           touch _site/.nojekyll
 
-      - uses: actions/upload-pages-artifact@v3
+      # Publikace na větev gh-pages: u veřejného repa GitHub Pages zapne automaticky,
+      # není potřeba nic klikat v nastavení. URL: https://<owner>.github.io/<repo>/
+      - name: Publikovat dashboard (větev gh-pages)
         if: always()
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: _site
-
-  deploy:
-    name: Publikovat dashboard (GitHub Pages)
-    needs: scan
-    if: always()
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site
+          publish_branch: gh-pages
+          force_orphan: true
+          user_name: thajland-bot
+          user_email: thajland-bot@users.noreply.github.com
+          commit_message: "dashboard ${{ github.run_number }}"

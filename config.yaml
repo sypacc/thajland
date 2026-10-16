@@ -21,8 +21,8 @@ trip:
 
 scan:
   # Prodleva mezi dotazy (s), aby nás Google nezačal blokovat.
-  delay_seconds: 2.0
-  jitter_seconds: 1.5
+  delay_seconds: 3.0
+  jitter_seconds: 2.0
   retries: 3
   # Pojistka proti nekonečným běhům.
   max_queries: 400

@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import os
 import re
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -47,7 +49,14 @@ def search(origin: str, dest: str, depart: dt.date, ret: dt.date, *, currency: s
     tree = HTMLParser(r.text)
     nodes = tree.css("div.result")
     if not nodes:
-        meta["error"] = "no div.result (layout changed or blocked)"
+        title = tree.css_first("title")
+        snippet = _clean(tree.body.text(separator=" "))[:200] if tree.body else ""
+        meta["error"] = (f"no div.result; title={title.text().strip()[:60] if title else '?'}; "
+                         f"len={len(r.text)}; text={snippet}")
+        d = os.environ.get("THAJLAND_DEBUG_DIR")
+        if d:
+            Path(d).mkdir(parents=True, exist_ok=True)
+            (Path(d) / f"azair_{origin}-{dest}_{depart}.html").write_text(r.text, encoding="utf-8")
         return [], meta
 
     now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

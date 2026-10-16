@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import os
+import re
 import time
+from pathlib import Path
 from typing import Any
 
-from fast_flights import FlightQuery, Passengers, create_query, get_flights
+from fast_flights import FlightQuery, Passengers, create_query, fetch_flights_html
 from fast_flights.exceptions import FlightsNotFound
 from fast_flights.parser import parse as parse_html
 
@@ -24,6 +27,23 @@ log = logging.getLogger("thajland.google")
 
 class GoogleBlocked(RuntimeError):
     """Google vrátil stránku bez dat (captcha/consent/429)."""
+
+
+_DEBUG_COUNT = {"n": 0}
+
+
+def _debug_dump(name: str, content: str | bytes, limit: int = 12) -> None:
+    """Uloží surovou odpověď pro ladění (jen když je nastaven THAJLAND_DEBUG_DIR)."""
+    d = os.environ.get("THAJLAND_DEBUG_DIR")
+    if not d or _DEBUG_COUNT["n"] >= limit:
+        return
+    _DEBUG_COUNT["n"] += 1
+    path = Path(d) / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if isinstance(content, bytes):
+        path.write_bytes(content)
+    else:
+        path.write_text(content, encoding="utf-8")
 
 
 def _iso(sd) -> str:
@@ -82,6 +102,11 @@ def _fetch_html_playwright(url: str, timeout_ms: int = 45000) -> str:
         except Exception:
             pass
         html = page.content()
+        if "errorHasStatus: true" in html:
+            try:
+                _debug_dump("google_pw_error.png", page.screenshot(full_page=True))
+            except Exception:
+                pass
         ctx.close()
         browser.close()
         return html
@@ -98,16 +123,26 @@ def search(origin: str, dest: str, depart: dt.date, ret: dt.date, *, currency: s
     last_err: Exception | None = None
     results = None
 
+    not_found = 0
     for attempt in range(1, retries + 1):
         meta["attempts"] = attempt
         try:
-            results = get_flights(q)
+            html = fetch_flights_html(q)
+            results = parse_html(html)
             meta["method"] = "primp"
             break
-        except FlightsNotFound as e:  # genuinely no flights
+        except FlightsNotFound as e:
+            # Google vrací 'errorHasStatus' i při dočasné chybě / soft-blocku, ne jen bez letů.
+            not_found += 1
             meta["error"] = f"no flights: {e}"
-            results = []
-            break
+            try:
+                _debug_dump(f"google_error_{origin}-{dest}_{depart}_{attempt}.html", html)  # type: ignore[name-defined]
+            except Exception:
+                pass
+            if not_found >= 2:
+                results = None
+                break
+            time.sleep(6 + 2 * attempt)
         except Exception as e:  # noqa: BLE001 – parser/HTTP failure => maybe blocked
             last_err = e
             log.warning("google %s-%s %s: pokus %d selhal: %s", origin, dest, depart, attempt, e)
@@ -118,12 +153,16 @@ def search(origin: str, dest: str, depart: dt.date, ret: dt.date, *, currency: s
             html = _fetch_html_playwright(url)
             results = parse_html(html)
             meta["method"] = "playwright"
+            meta["error"] = None
         except FlightsNotFound as e:
             meta["error"] = f"no flights: {e}"
             results = []
+            meta["method"] = "playwright"
         except Exception as e:  # noqa: BLE001
             last_err = e
             log.warning("google playwright fallback %s-%s %s selhal: %s", origin, dest, depart, e)
+    elif results is None and not_found:
+        results = []  # bez fallbacku: považujeme za 'bez výsledků'
 
     if results is None:
         meta["error"] = f"{type(last_err).__name__}: {last_err}"
@@ -170,7 +209,7 @@ def search(origin: str, dest: str, depart: dt.date, ret: dt.date, *, currency: s
 
 
 # ------------------------------------------------------------------ prodejci
-_PRICE_LINE = __import__("re").compile(r"^(\d[\d\s .]{2,})\s*(?:Kč|CZK|€|EUR|\$)$")
+_PRICE_LINE = re.compile(r"^(\d[\d\s .]{2,})\s*(?:Kč|CZK|€|EUR|\$)$")
 
 
 def _parse_booking_options(text: str) -> list[dict[str, Any]]:
@@ -189,7 +228,7 @@ def _parse_booking_options(text: str) -> list[dict[str, Any]]:
         m = _PRICE_LINE.match(l.replace(" ", " "))
         if not m:
             continue
-        price = int(__import__("re").sub(r"\D", "", m.group(1)) or 0)
+        price = int(re.sub(r"\D", "", m.group(1)) or 0)
         if price <= 0:
             continue
         name = None
@@ -220,6 +259,7 @@ def fetch_sellers(url: str, price: int, airline_hint: str | None = None, timeout
                                   user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                                               "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"))
         page = ctx.new_page()
+        step = "goto"
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
             for sel in ("button:has-text('Přijmout vše')", "button:has-text('Accept all')"):
@@ -229,38 +269,61 @@ def fetch_sellers(url: str, price: int, airline_hint: str | None = None, timeout
                         break
                 except Exception:
                     pass
-            page.wait_for_selector("li[role='listitem'], ul li", timeout=timeout_ms)
-            page.wait_for_timeout(1500)
+            step = "výsledky"
+            page.wait_for_function("document.body && /Kč|CZK/.test(document.body.innerText)", timeout=timeout_ms)
+            page.wait_for_timeout(2000)
             # 1) itinerář tam: položka s naší cenou (a aerolinkou, pokud známe)
             items = page.locator("li").filter(has_text=price_str)
             if items.count() == 0:
                 items = page.locator("li").filter(has_text=price_alt)
+            if items.count() == 0:
+                items = page.locator("li").filter(has_text=re.compile(rf"{price // 1000}\D?{price % 1000:03d}"))
             if airline_hint and items.count() > 1:
                 hinted = items.filter(has_text=airline_hint)
                 if hinted.count():
                     items = hinted
             if items.count() == 0:
+                _debug_dump(f"sellers_nomatch_{price}.png", page.screenshot(full_page=True))
                 return [], "itinerář s danou cenou nenalezen"
-            items.first.click()
-            page.wait_for_timeout(2500)
-            # 2) zpáteční let: pokud se zobrazil další seznam, vezmeme první (nejlevnější/nejlepší)
+            step = "klik tam"
+            target = items.first
+            btn = target.locator("button, [role='button']").first
+            try:
+                (btn if btn.count() else target).click(timeout=8000)
+            except Exception:
+                target.click(timeout=8000, force=True)
+            page.wait_for_timeout(3000)
+            # 2) zpáteční let: pokud se zobrazil další seznam, vezmeme první (nejlepší)
+            step = "klik zpět"
             txt = page.inner_text("body")
             if "Možnosti rezervace" not in txt and "Booking options" not in txt:
-                lis = page.locator("li").filter(has_text="Kč")
+                lis = page.locator("li").filter(has_text=re.compile("Kč|CZK"))
                 if lis.count():
-                    lis.first.click()
-                    page.wait_for_timeout(2500)
+                    t2 = lis.first
+                    b2 = t2.locator("button, [role='button']").first
+                    try:
+                        (b2 if b2.count() else t2).click(timeout=8000)
+                    except Exception:
+                        t2.click(timeout=8000, force=True)
+                    page.wait_for_timeout(3000)
+            step = "možnosti rezervace"
             try:
                 page.wait_for_selector("text=/Možnosti rezervace|Booking options/", timeout=15000)
             except Exception:
+                _debug_dump(f"sellers_nobooking_{price}.png", page.screenshot(full_page=True))
                 return [], "sekce 'Možnosti rezervace' se nezobrazila"
             txt = page.inner_text("body")
             idx = max(txt.find("Možnosti rezervace"), txt.find("Booking options"))
             section = txt[idx: idx + 6000]
+            _debug_dump(f"sellers_section_{price}.txt", section)
             sellers = _parse_booking_options(section)
             return sellers, None if sellers else "nepodařilo se rozparsovat prodejce"
         except Exception as e:  # noqa: BLE001
-            return [], f"{type(e).__name__}: {str(e)[:160]}"
+            try:
+                _debug_dump(f"sellers_fail_{price}.png", page.screenshot(full_page=True))
+            except Exception:
+                pass
+            return [], f"[{step}] {type(e).__name__}: {str(e)[:120]}"
         finally:
             ctx.close()
             browser.close()
