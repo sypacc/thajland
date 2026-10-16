@@ -29,10 +29,11 @@ scan:
   time_budget_minutes: 75
   # Kolik nabídek z každého dotazu uložit (seřazeno podle skóre).
   keep_per_query: 6
-  # Zdroje: google = Google Flights (hlavní), azair = Azair.eu (experimentální, levné kombinace)
+  # Zdroje: google = Google Flights (hlavní). azair = Azair.eu – vypnuto: pro termíny ~10 měsíců
+  # dopředu vrací "dotaz je pro vyhledávací server příliš rozsáhlý" (hledá jen pár měsíců dopředu).
   sources:
     google: true
-    azair: true
+    azair: false
   # Když selže primp fetch Google Flights, zkusí se headless Chromium (Playwright) v anonymním kontextu.
   playwright_fallback: true
   # Experimentální: pro N nejlepších dealů otevřít Google Flights v headless Chromiu

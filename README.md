@@ -11,7 +11,8 @@ a dashboard, který ukazuje nejlepší příležitosti podle **poměru cena/výk
 2. **Každý dotaz je „anonymní okno“** – samostatný HTTP požadavek z čerstvého runneru bez cookies
    a historie. Hlavní zdroj je **Google Flights** (protobuf dotaz `tfs`, knihovna `fast-flights`);
    když primp fetch selže, zkusí se headless Chromium v incognito kontextu (Playwright).
-   **Azair.eu** je experimentální doplňkový zdroj.
+   **Azair.eu** je v kódu jako doplňkový zdroj, ale vypnutý: na dotazy ~10 měsíců dopředu odpovídá
+   „dotaz je pro vyhledávací server příliš rozsáhlý“ (ověřeno v běhu), zapnout jde v `config.yaml` → `scan.sources`.
 3. Každou nabídku **ohodnotí skóre = efektivní cena v Kč**: cena + penalizace za čas nad 14 h,
    za 2. a další přestup, za dlouhé (>5 h) či rizikově krátké (<1 h) přestupy ± korekce za aerolinku,
    přímý let má bonus. Váhy jsou v `config.yaml` → sekce `scoring`.

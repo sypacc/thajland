@@ -116,7 +116,7 @@ def run(cfg: Config, *, limit: int | None = None, only_source: str | None = None
                         pw_not_found_confirmed += 1
                 else:
                     found, meta = azair.search(origin, dest, dep, ret, currency=cfg.currency)
-                qrec["status"] = "ok" if not meta.get("error") else "empty"
+                qrec["status"] = "ok" if (found and not meta.get("error")) else "empty"
                 qrec["url"] = meta.get("url")
                 qrec["error"] = meta.get("error")
                 qrec["method"] = meta.get("method")
@@ -221,12 +221,13 @@ def _enrich_sellers(offer_dicts: list[dict[str, Any]], n: int, remaining_s: floa
         return
     fresh = [o for o in offer_dicts if o["source"] == "google" and not o.get("stale") and o.get("score") is not None]
     fresh.sort(key=lambda o: o["score"])
-    seen: set[str] = set()
+    seen: set[tuple] = set()
     picked = []
     for o in fresh:
-        if o["id"] in seen:
+        key = (o["depart_date"], o["return_date"], o["price"], tuple(o.get("airlines") or []), o["route"])
+        if key in seen:
             continue
-        seen.add(o["id"])
+        seen.add(key)
         picked.append(o)
         if len(picked) >= n:
             break

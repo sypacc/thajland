@@ -311,6 +311,32 @@ def _parse_booking_options(text: str) -> list[dict[str, Any]]:
     return sellers
 
 
+def _select_row(page, row) -> None:
+    """Vybere let v řádku výsledků: tlačítko 'Vybrat let', jinak klik na cenu, jinak na řádek.
+
+    První <button> v řádku bývá 'Zobrazit podrobnosti letu' (jen rozbalí detail), proto se mu vyhýbáme.
+    """
+    sel_btn = row.locator("button[aria-label*='Vybrat'], button[aria-label*='Select'], "
+                          "[role='button'][aria-label*='Vybrat'], [role='button'][aria-label*='Select']")
+    if sel_btn.count():
+        try:
+            sel_btn.first.click(timeout=8000)
+            return
+        except Exception:
+            pass
+    price_el = row.locator("text=/\\d[\\d\\s\\u00a0]*\\s?(Kč|CZK)/").first
+    if price_el.count():
+        try:
+            price_el.click(timeout=8000)
+            return
+        except Exception:
+            pass
+    try:
+        row.click(timeout=8000, position={"x": 40, "y": 20})
+    except Exception:
+        row.click(timeout=8000, force=True)
+
+
 def _log_page_state(page, why: str) -> None:
     """Diagnostika do logu (artefakty nemusí být dostupné): URL, nadpisy, tlačítka, úryvek textu."""
     try:
@@ -366,26 +392,19 @@ def fetch_sellers(url: str, price: int, airline_hint: str | None = None, timeout
                 _log_page_state(page, f"cena {price_str} nenalezena")
                 return [], "itinerář s danou cenou nenalezen"
             step = "klik tam"
-            target = items.first
-            btn = target.locator("button, [role='button']").first
-            try:
-                (btn if btn.count() else target).click(timeout=8000)
-            except Exception:
-                target.click(timeout=8000, force=True)
+            _select_row(page, items.first)
             page.wait_for_timeout(3000)
-            # 2) zpáteční let: pokud se zobrazil další seznam, vezmeme první (nejlepší)
+            # 2) seznam zpátečních letů: vybereme první (Google řadí 'nejlepší')
             step = "klik zpět"
-            txt = page.inner_text("body")
-            if "Možnosti rezervace" not in txt and "Booking options" not in txt:
+            for _ in range(2):
+                txt = page.inner_text("body")
+                if "Možnosti rezervace" in txt or "Booking options" in txt:
+                    break
                 lis = page.locator("li").filter(has_text=re.compile("Kč|CZK"))
-                if lis.count():
-                    t2 = lis.first
-                    b2 = t2.locator("button, [role='button']").first
-                    try:
-                        (b2 if b2.count() else t2).click(timeout=8000)
-                    except Exception:
-                        t2.click(timeout=8000, force=True)
-                    page.wait_for_timeout(3000)
+                if lis.count() == 0:
+                    break
+                _select_row(page, lis.first)
+                page.wait_for_timeout(3000)
             step = "možnosti rezervace"
             try:
                 page.wait_for_selector("text=/Možnosti rezervace|Booking options/", timeout=15000)
