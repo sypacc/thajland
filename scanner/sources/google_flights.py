@@ -173,6 +173,18 @@ def _fetch_html_playwright(url: str, timeout_ms: int = 45000) -> str:
             page.wait_for_selector("script.ds\\:1", state="attached", timeout=20000)
         except Exception:
             pass
+        # diagnostika: co vidí uživatel ve vykreslené stránce (výsledky mohou přijít až přes JS)
+        try:
+            page.wait_for_function("document.body && (document.body.innerText.match(/Kč/g) || []).length > 2", timeout=15000)
+        except Exception:
+            pass
+        try:
+            body = page.inner_text("body")
+            i = body.find("Výsledky vyhledávání")
+            log.info("playwright DOM: 'Kč' %dx | %s", body.count("Kč"),
+                     re.sub(r"\s+", " ", body[i:i + 400] if i >= 0 else body[:400]))
+        except Exception:
+            pass
         html = page.content()
         if "errorHasStatus: true" in html:
             try:
