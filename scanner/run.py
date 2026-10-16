@@ -246,7 +246,7 @@ def _enrich_sellers(offer_dicts: list[dict[str, Any]], n: int, remaining_s: floa
             o["price_insight"] = insight
         log.info("Prodejci %s %s %s: %s | insight %s", o["route"], o["depart_date"], o["price"],
                  ", ".join(f"{x['name']} {x['price']}" for x in sellers) or err, insight)
-        time.sleep(2)
+        time.sleep(8 + random.random() * 4)   # šetrně – Google jinak vrací 'něco se pokazilo'
 
 
 def _offer_from_dict(d: dict[str, Any]) -> Offer:

@@ -39,7 +39,7 @@ scan:
   # Experimentální: pro N nejlepších dealů otevřít Google Flights v headless Chromiu
   # a přečíst "Možnosti rezervace" = u koho (aerolinka / cestovka) a za kolik se dá koupit.
   enrich_sellers: true
-  enrich_sellers_top: 8
+  enrich_sellers_top: 6
 
 # Skóre "cena/výkon": ke skutečné ceně přičítáme "virtuální" náklady za nepohodlí.
 # Výsledek = efektivní cena v Kč; čím nižší, tím lepší nabídka.

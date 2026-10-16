@@ -341,6 +341,37 @@ def _parse_booking_options(text: str) -> tuple[list[dict[str, Any]], dict[str, A
     return sellers, insight
 
 
+_SOFT_ERR = ("něco se pokazilo", "Something went wrong", "Nebyly nalezeny žádné výsledky", "No results")
+
+
+def _recover(page, attempts: int = 2) -> bool:
+    """Google po rychlé sérii načtení vrací 'Je nám líto, ale něco se pokazilo' – počkat a znovu načíst."""
+    for _ in range(attempts):
+        try:
+            body = page.inner_text("body")
+        except Exception:
+            return False
+        if not any(t in body for t in _SOFT_ERR):
+            return True
+        page.wait_for_timeout(7000)
+        btn = page.locator("button:has-text('Znovu načíst'), button:has-text('Reload')")
+        try:
+            if btn.count():
+                btn.first.click(timeout=5000)
+            else:
+                page.reload(wait_until="domcontentloaded")
+        except Exception:
+            try:
+                page.reload(wait_until="domcontentloaded")
+            except Exception:
+                pass
+        page.wait_for_timeout(4000)
+    try:
+        return not any(t in page.inner_text("body") for t in _SOFT_ERR)
+    except Exception:
+        return False
+
+
 def _select_row(page, row) -> None:
     """Vybere let v řádku výsledků: tlačítko 'Vybrat let', jinak klik na cenu, jinak na řádek.
 
@@ -405,8 +436,10 @@ def fetch_sellers(url: str, price: int, airline_hint: str | None = None, timeout
                 except Exception:
                     pass
             step = "výsledky"
-            page.wait_for_function("document.body && /Kč|CZK/.test(document.body.innerText)", timeout=timeout_ms)
+            page.wait_for_function("document.body && /Kč|CZK|pokazilo|went wrong/.test(document.body.innerText)", timeout=timeout_ms)
             page.wait_for_timeout(2000)
+            if not _recover(page):
+                return [], "Google: 'něco se pokazilo' i po obnovení (rate-limit)", None
             # 1) itinerář tam: položka s naší cenou (a aerolinkou, pokud známe)
             items = page.locator("li").filter(has_text=price_str)
             if items.count() == 0:
@@ -423,7 +456,8 @@ def fetch_sellers(url: str, price: int, airline_hint: str | None = None, timeout
                 return [], "itinerář s danou cenou nenalezen", None
             step = "klik tam"
             _select_row(page, items.first)
-            page.wait_for_timeout(3000)
+            page.wait_for_timeout(3500)
+            _recover(page)
             # 2) seznam zpátečních letů: vybereme první (Google řadí 'nejlepší')
             step = "klik zpět"
             for _ in range(2):
@@ -434,7 +468,8 @@ def fetch_sellers(url: str, price: int, airline_hint: str | None = None, timeout
                 if lis.count() == 0:
                     break
                 _select_row(page, lis.first)
-                page.wait_for_timeout(3000)
+                page.wait_for_timeout(3500)
+                _recover(page)
             step = "možnosti rezervace"
             try:
                 page.wait_for_selector("text=/Možnosti rezervace|Booking options/", timeout=15000)
