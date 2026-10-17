@@ -30,6 +30,26 @@
     IST: "Istanbul", DXB: "Dubaj", DOH: "Dauhá", AUH: "Abú Dhabí", ZRH: "Curych", HEL: "Helsinky", FRA: "Frankfurt", MUC2: "Mnichov", WAW: "Varšava", CDG: "Paříž", AMS: "Amsterdam", LHR: "Londýn", SIN: "Singapur", TPE: "Tchaj-pej", HKG: "Hongkong", PEK: "Peking", PVG: "Šanghaj", CAN: "Kanton", KUL: "Kuala Lumpur", MCT: "Maskat", CAI: "Káhira", ADD: "Addis Abeba", BAH: "Bahrajn", KWI: "Kuvajt", RUH: "Rijád", JED: "Džidda", TLV: "Tel Aviv", BOM: "Bombaj", DEL: "Dillí", CMB: "Kolombo", ALA: "Almaty", TAS: "Taškent", BEG: "Bělehrad", OTP: "Bukurešť", SAW: "Istanbul (SAW)", CPH: "Kodaň", ARN: "Stockholm", OSL: "Oslo", BRU: "Brusel", MXP: "Milán", FCO: "Řím", VIE2: "Vídeň" };
   const city = (c) => CITY[c] || c;
   const LINK_NAMES = { google: "Google Flights", kiwi: "Kiwi.com", skyscanner: "Skyscanner", kayak: "Kayak", azair: "Azair", pelikan: "Pelikán", letuska: "Letuška" };
+  const FROM = { PRG: "z Prahy", VIE: "z Vídně", BUD: "z Budapešti", BRQ: "z Brna", MUC: "z Mnichova", BER: "z Berlína" };
+  const fromCity = (c) => FROM[c] || "z " + city(c);
+  const SLUG = { PRG: "prague-czechia", VIE: "vienna-austria", BUD: "budapest-hungary", BRQ: "brno-czechia", MUC: "munich-germany", BER: "berlin-germany", BKK: "bangkok-thailand", DMK: "bangkok-thailand", HKT: "phuket-thailand", CNX: "chiang-mai-thailand", USM: "ko-samui-thailand", KBV: "krabi-thailand" };
+  const ENAME = { PRG: "Prague", VIE: "Vienna", BUD: "Budapest", BRQ: "Brno", MUC: "Munich", BER: "Berlin", BKK: "Bangkok", DMK: "Bangkok", HKT: "Phuket", CNX: "Chiang Mai", USM: "Koh Samui", KBV: "Krabi" };
+  // odkazy s předvyplněným termínem (stejná logika jako scanner/links.py); v datech je jen Google (přesný dotaz)
+  const buildLinks = (o) => {
+    const l = { google: (o.links || {}).google };
+    const dep = o.depart_date, ret = o.return_date, yy = (d) => d.slice(2, 4) + d.slice(5, 7) + d.slice(8, 10);
+    l.kiwi = `https://www.kiwi.com/cz/search/results/${SLUG[o.origin] || o.origin.toLowerCase()}/${SLUG[o.destination] || o.destination.toLowerCase()}/${dep}/${ret}?adults=1`;
+    l.skyscanner = `https://www.skyscanner.cz/transport/lety/${o.origin.toLowerCase()}/${o.destination.toLowerCase()}/${yy(dep)}/${yy(ret)}/?adults=1&cabinclass=economy&rtn=1&preferdirects=false`;
+    l.kayak = `https://www.kayak.com/flights/${o.origin}-${o.destination}/${dep}/${ret}/1adults?sort=bestflight_a`;
+    const d1 = new Date(dep + "T00:00:00Z"), d2 = new Date(ret + "T00:00:00Z"), n = Math.round((d2 - d1) / 864e5);
+    const cz = (d) => `${d.getUTCDate()}.${d.getUTCMonth() + 1}.${d.getUTCFullYear()}`;
+    const az = { tp: 0, searchtype: "flexi", isOneway: "return", srcAirport: `${ENAME[o.origin] || o.origin} [${o.origin}]`, srcap0: o.origin, dstAirport: `${ENAME[o.destination] || o.destination} [${o.destination}]`, dstap0: o.destination, adults: 1, children: 0, infants: 0, minHourStay: "0:45", maxHourStay: "23:20", minHourOutbound: "0:00", maxHourOutbound: "24:00", minHourInbound: "0:00", maxHourInbound: "24:00", depdate: cz(d1), arrdate: cz(d2), minDaysStay: Math.max(1, n - 1), maxDaysStay: n + 1, nextday: 0, autoprice: "true", currency: "CZK", wizzxclub: "false", flyoneclub: "false", blueairbenefits: "false", megavolotea: "false", schengen: "false", transfer: "false", samedep: "true", samearr: "true", maxChng: 2, isOneway2: undefined, resultSubmit: "Search" };
+    for (let i = 0; i < 7; i++) { az["dep" + i] = "true"; az["arr" + i] = "true"; }
+    delete az.isOneway2;
+    l.azair = "https://www.azair.eu/azfin.php?" + new URLSearchParams(az).toString();
+    l.pelikan = "https://www.pelikan.cz/cs/letenky"; l.letuska = "https://www.letuska.cz/";
+    return l;
+  };
   const SERIES_VARS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6"];
   const cssVar = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
   const median = (arr) => { const a = arr.filter((x) => x != null).sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : null; };
@@ -44,7 +64,7 @@
 
   const cfg = LATEST.config;
   const travelers = cfg.travelers || 1;
-  const offers = LATEST.offers.map((o, i) => ({ ...o, _i: i, _month: +o.depart_date.slice(5, 7), _rk: `${o.origin}→${o.destination}` }));
+  const offers = LATEST.offers.map((o, i) => ({ ...o, _i: i, _month: +o.depart_date.slice(5, 7), _rk: `${o.origin}→${o.destination}`, links: buildLinks(o) }));
   const fresh = offers.filter((o) => !o.stale);
   const routeOrder = [];
   for (const o of cfg.origins) for (const d of cfg.destinations) routeOrder.push(`${o}→${d}`);
@@ -144,7 +164,7 @@
       const m = minByKey((o) => `${o.origin}|${o.destination}|${o.depart_date}|${o.nights}`);
       const diffs = [];
       for (const k of Object.keys(m)) if (k.startsWith(origins[0] + "|")) { const k2 = origins[1] + k.slice(origins[0].length); if (m[k2] != null && isFinite(m[k2])) diffs.push(m[k] - m[k2]); }
-      if (diffs.length >= 3) { const d = median(diffs); out.push(d > 500 ? `Z ${city(origins[1])} vychází stejný termín typicky o <strong>${czk(d)}</strong> levněji než z ${city(origins[0])} (${diffs.length} srovnání). K ceně připočti dopravu.` : d < -500 ? `Z ${city(origins[0])} je to typicky o <strong>${czk(-d)}</strong> levnější než z ${city(origins[1])}.` : `${city(origins[0])} a ${city(origins[1])} vycházejí cenově podobně (rozdíl do 500 Kč).`); }
+      if (diffs.length >= 3) { const d = median(diffs); const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1); out.push(d > 500 ? `${cap(fromCity(origins[1]))} vychází stejný termín typicky o <strong>${czk(d)}</strong> levněji než ${fromCity(origins[0])} (${diffs.length} srovnání). K ceně připočti dopravu na letiště.` : d < -500 ? `${cap(fromCity(origins[0]))} je to typicky o <strong>${czk(-d)}</strong> levnější než ${fromCity(origins[1])}.` : `${city(origins[0])} a ${city(origins[1])} vycházejí cenově podobně (rozdíl do 500 Kč).`); }
     }
     // kam
     if (cfg.destinations.length >= 2) {

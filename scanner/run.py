@@ -211,6 +211,12 @@ def finalize(cfg: Config, parts: list[dict[str, Any]], *, enrich: bool = True) -
     if enrich_n and not google_disabled and offers:
         _enrich_sellers(offers, enrich_n, 900)
 
+    # zeštíhlení výstupu: konstantní poznámka a odvoditelné odkazy (Kiwi, Skyscanner, …) se v dashboardu dopočítají
+    for o in offers:
+        o.pop("note", None)
+        if isinstance(o.get("links"), dict) and "google" in o["links"]:
+            o["links"] = {"google": o["links"]["google"]}
+
     ok = [q for q in queries if q["status"] == "ok" and not q.get("stale")]
     prices = [q["min_price"] for q in queries if q.get("min_price")]
     stats = {
