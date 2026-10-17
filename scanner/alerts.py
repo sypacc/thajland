@@ -21,6 +21,8 @@ KIND_LABEL = {
     "drop": "prudký pokles",
     "anomaly": "abnormálně nízko",
     "route_low": "nové minimum trasy",
+    "new_dates": "nově v prodeji",
+    "new_route": "nová trasa v prodeji",
 }
 
 
@@ -123,6 +125,20 @@ def detect(payload: dict[str, Any], history: list[dict[str, Any]], cfg: dict[str
         if len(hist) >= route_low_min_days and o["price"] < min(hist):
             add("route_low", o, f"nejnižší cena na trase {rk} za {len(hist)} běhů (dosud {min(hist)})", "medium",
                 previous_low=min(hist))
+
+    # 5) nově v prodeji: termíny/trasy, které se v historii (>=3 běhy) nikdy neobjevily (příznak z finalizace)
+    new_by_route: dict[str, list[dict[str, Any]]] = {}
+    for o in best_by_q.values():
+        if o.get("is_new"):
+            new_by_route.setdefault(f"{o['origin']}-{o['destination']}", []).append(o)
+    for rk, items in new_by_route.items():
+        best = min(items, key=lambda x: (x.get("score") if x.get("score") is not None else x["price"]))
+        dates = sorted({x["depart_date"] for x in items})
+        months = sorted({d[5:7] for d in dates})
+        kind = "new_route" if any(x.get("is_new_route") for x in items) else "new_dates"
+        add(kind, best,
+            f"{len(dates)} nových dnů odletu ({dates[0]} – {dates[-1]}), od {min(x['price'] for x in items)} Kč",
+            "medium", new_dates=len(dates), new_months=months)
 
     sev_rank = {"high": 0, "medium": 1, "info": 2}
     out: list[dict[str, Any]] = []

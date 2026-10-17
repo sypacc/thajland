@@ -7,11 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       limit:
-        description: "Omezit počet dotazů (test), prázdné = plný běh"
-        required: false
-        default: ""
-      source:
-        description: "Jen jeden zdroj (google|azair), prázdné = všechny"
+        description: "Omezit počet dotazů na jeden běh (test), prázdné = plný běh"
         required: false
         default: ""
       route:
@@ -35,35 +31,100 @@ permissions:
   contents: write
   issues: write
 
+env:
+  PYTHON_VERSION: "3.12"
+
 jobs:
   scan:
-    name: Stáhnout ceny a aktualizovat data
+    name: Sken ${{ matrix.origin }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 110
+    strategy:
+      fail-fast: false
+      matrix:
+        origin: [PRG, VIE]
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
+      - name: Instalace závislostí
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt playwright pytest
+          python -m playwright install --with-deps chromium
+      - name: Testy
+        run: python -m pytest -q tests
+      - name: Sken (každý dotaz = čistý požadavek bez cookies, tj. "anonymní okno")
+        env:
+          PYTHONUNBUFFERED: "1"
+          THAJLAND_DEBUG_DIR: debug
+        run: |
+          ARGS="--origin ${{ matrix.origin }} --partial-out partial/${{ matrix.origin }}.json"
+          if [ -n "${{ github.event.inputs.limit }}" ]; then ARGS="$ARGS --limit ${{ github.event.inputs.limit }}"; fi
+          if [ -n "${{ github.event.inputs.route }}" ]; then ARGS="$ARGS --route ${{ github.event.inputs.route }}"; fi
+          if [ -n "${{ github.event.inputs.max_stops }}" ]; then ARGS="$ARGS --max-stops ${{ github.event.inputs.max_stops }}"; fi
+          python -m scanner.run $ARGS
+      - name: Ladicí report (do logu)
+        if: always()
+        run: |
+          python - <<'PY'
+          import pathlib, re
+          d = pathlib.Path("debug")
+          if not d.exists():
+              print("bez ladicích souborů"); raise SystemExit
+          for f in sorted(d.iterdir())[:12]:
+              print(f"=== {f.name} ({f.stat().st_size} B)")
+              if f.suffix == ".txt":
+                  print(f.read_text(errors="ignore")[:2500])
+              elif f.suffix == ".html":
+                  h = f.read_text(errors="ignore")
+                  t = re.search(r"<title>(.*?)</title>", h, re.S)
+                  print("title:", (t.group(1).strip() if t else "?"))
+                  txt = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", h, flags=re.S | re.I)
+                  txt = re.sub(r"<[^>]+>", " ", txt); txt = re.sub(r"\s+", " ", txt)
+                  print("text:", txt[:800])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: partial-${{ matrix.origin }}
+          path: partial/
+          retention-days: 3
+      - name: Ladicí výstupy
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-${{ matrix.origin }}-${{ github.run_number }}
+          path: debug/
+          if-no-files-found: ignore
+          retention-days: 7
 
+  finalize:
+    name: Sloučit, vyhodnotit, publikovat
+    needs: scan
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
       - name: Instalace závislostí
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt playwright
           python -m playwright install --with-deps chromium
-
-      - name: Testy
-        run: pip install pytest && python -m pytest -q tests
-
-      - name: Sken (každý dotaz = čistý požadavek bez cookies, tj. "anonymní okno")
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: partial-*
+          path: partial/
+          merge-multiple: true
+      - name: Finalizace (sloučení částí, příznaky, prodejci, hlášení)
         env:
           PYTHONUNBUFFERED: "1"
-          THAJLAND_DEBUG_DIR: debug
-          # Hlášení dealů – kanály se použijí jen když je secret nastavený (Settings → Secrets → Actions)
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -74,38 +135,10 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
         run: |
-          ARGS=""
-          if [ -n "${{ github.event.inputs.limit }}" ]; then ARGS="$ARGS --limit ${{ github.event.inputs.limit }}"; fi
-          if [ -n "${{ github.event.inputs.source }}" ]; then ARGS="$ARGS --source ${{ github.event.inputs.source }}"; fi
-          if [ -n "${{ github.event.inputs.route }}" ]; then ARGS="$ARGS --route ${{ github.event.inputs.route }}"; fi
-          if [ -n "${{ github.event.inputs.max_stops }}" ]; then ARGS="$ARGS --max-stops ${{ github.event.inputs.max_stops }}"; fi
+          ls -la partial/ || true
+          ARGS="--merge 'partial/*.json'"
           if [ "${{ github.event.inputs.no_save }}" = "true" ]; then ARGS="$ARGS --no-save"; fi
-          python -m scanner.run $ARGS
-
-      - name: Ladicí report (do logu)
-        if: always()
-        run: |
-          python - <<'PY'
-          import pathlib, re
-          d = pathlib.Path("debug")
-          if not d.exists():
-              print("bez ladicích souborů"); raise SystemExit
-          for f in sorted(d.iterdir()):
-              print(f"=== {f.name} ({f.stat().st_size} B)")
-              if f.suffix == ".txt":
-                  print(f.read_text(errors="ignore")[:2500])
-              elif f.suffix == ".html":
-                  h = f.read_text(errors="ignore")
-                  t = re.search(r"<title>(.*?)</title>", h, re.S)
-                  print("title:", (t.group(1).strip() if t else "?"))
-                  classes = sorted(set(re.findall(r'class="([^"]{1,40})"', h)))
-                  print("classes:", classes[:80])
-                  print("meta refresh:", bool(re.search(r"http-equiv=.refresh", h, re.I)), "| scripts:", len(re.findall(r"<script", h)))
-                  txt = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", h, flags=re.S | re.I)
-                  txt = re.sub(r"<[^>]+>", " ", txt); txt = re.sub(r"\s+", " ", txt)
-                  print("text:", txt[:1500])
-          PY
-
+          eval python -m scanner.run $ARGS
       - name: Shrnutí běhu
         if: always()
         run: |
@@ -117,9 +150,9 @@ jobs:
           d = json.loads(p.read_text())
           s = d["stats"]
           print(f"## Sken {d['day']}\n")
-          print(f"- dotazů OK: **{s['queries_ok']}** / {s['queries_total']} (chyb {s['queries_error']}, přeskočeno {s['queries_skipped']}, převzato z minula {s['queries_stale']})")
+          print(f"- termínů s nabídkou: **{s['queries_ok']}** / {s['queries_total']} (chyb {s['queries_error']}, přeskočeno {s['queries_skipped']}, převzato z minula {s['queries_stale']}, nově v prodeji {s.get('queries_new', 0)})")
           print(f"- nabídek: {s['offers']}, nejnižší cena: **{s['min_price']} {d['config']['currency']}** / os., medián minim: {s['median_min_price']}")
-          print(f"- trvání: {s['duration_s']} s, Google vypnut pro blokaci: {s['google_disabled']}\n")
+          print(f"- trvání: {s['duration_s']} s, částí: {s.get('parts')}, Google vypnut pro blokaci: {s['google_disabled']}\n")
           al = d.get("alerts_today") or []
           print(f"### Hlášení: {len(al)}\n")
           for a in al[:15]:
@@ -132,33 +165,19 @@ jobs:
               for o in top:
                   print(f"| {o['score']} | {o['price']} | {o['route']} | {o['depart_date']} | {o['return_date']} | {', '.join(o['airlines'])} | {o['stops']} |")
           PY
-
       - name: Commit dat
-        id: commit
         if: always()
         run: |
           git config user.name "thajland-bot"
           git config user.email "thajland-bot@users.noreply.github.com"
           git add -A data
           if git diff --cached --quiet; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Žádná změna dat."
           else
             git commit -m "data: sken $(date -u +%Y-%m-%d)"
             git pull --rebase origin "${GITHUB_REF_NAME}" || true
             git push origin "HEAD:${GITHUB_REF_NAME}"
-            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Ladicí výstupy (surové odpovědi Google/Azair, screenshoty)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-${{ github.run_number }}
-          path: debug/
-          if-no-files-found: ignore
-          retention-days: 7
-
       - name: Sestavit web
         if: always()
         run: |
@@ -167,9 +186,7 @@ jobs:
           cp -r assets _site/
           mkdir -p _site/data && cp data/*.json data/*.js _site/data/ 2>/dev/null || true
           touch _site/.nojekyll
-
-      # Publikace na větev gh-pages: u veřejného repa GitHub Pages zapne automaticky,
-      # není potřeba nic klikat v nastavení. URL: https://<owner>.github.io/<repo>/
+      # Publikace na větev gh-pages (Pages: Deploy from a branch → gh-pages). URL: https://sypacc.github.io/thajland/
       - name: Publikovat dashboard (větev gh-pages)
         if: always()
         uses: peaceiris/actions-gh-pages@v4

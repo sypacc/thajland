@@ -7,7 +7,8 @@ a dashboard, který ukazuje nejlepší příležitosti podle **poměru cena/výk
 
 1. **Každý den ráno** (GitHub Actions, cron `17 4 * * *` UTC) projde všechny kombinace
    `odletové letiště × cílové letiště × den odletu × délka pobytu` z `config.yaml`
-   (výchozí: PRG + VIE → BKK + HKT, odlety 1. 8.–30. 9. 2027 po 3 dnech, 13/14/15 dní).
+   (výchozí: PRG + VIE → BKK + HKT, **každý den odletu** 1. 8.–30. 9. 2027 × 13/14/15 dní = 732 kombinací).
+   V Actions běží Praha a Vídeň paralelně a třetí job výsledky sloučí, vyhodnotí a publikuje.
 2. **Každý dotaz je „anonymní okno“** – samostatný HTTP požadavek z čerstvého runneru bez cookies
    a historie. Hlavní zdroj je **Google Flights** (protobuf dotaz `tfs`, knihovna `fast-flights`);
    když primp fetch selže, zkusí se headless Chromium v incognito kontextu (Playwright).
@@ -37,6 +38,7 @@ Po každém běhu se nabídky porovnají s historií a vzniknou hlášení (`dat
 | prudký pokles | o ≥ 12 % nebo ≥ 2 500 Kč levnější než v předchozím běhu |
 | abnormálně nízko | ≥ 15 % pod mediánem historických minim daného termínu (po ≥ 5 bězích) |
 | nové minimum trasy | nejnižší cena na trase za celou historii (po ≥ 3 bězích) |
+| nově v prodeji / nová trasa | termín nebo celá trasa, která se v historii (≥ 3 běhy) nikdy neobjevila a teď má nabídky – typicky nově otevřený prodej (září, Praha → Phuket) |
 
 Jedna nabídka = jedno hlášení se všemi důvody, max. 8 za běh, stejný termín se neopakuje 7 dní (pokud neklesne o dalších 500 Kč).
 

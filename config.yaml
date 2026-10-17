@@ -6,10 +6,10 @@ trip:
   origins: [PRG, VIE]
   # Kam (BKK = Bangkok Suvarnabhumi, HKT = Phuket). Případně přidej DMK, CNX, USM, KBV.
   destinations: [BKK, HKT]
-  # Okno odletů (včetně) a krok mezi testovanými odlety ve dnech.
+  # Okno odletů (včetně) a krok mezi testovanými odlety ve dnech (1 = každý den srpna i září).
   depart_from: "2027-08-01"
   depart_to: "2027-09-30"
-  depart_step_days: 3
+  depart_step_days: 1
   # Délka pobytu ve dnech (odlet -> návrat). "2 týdny" = 13–15 dní.
   trip_lengths: [13, 14, 15]
   # Dotaz běží pro 1 dospělého (cena za osobu). Kolik vás letí – jen pro zobrazení celkové ceny.
@@ -24,9 +24,9 @@ scan:
   delay_seconds: 3.0
   jitter_seconds: 2.0
   retries: 3
-  # Pojistka proti nekonečným běhům.
-  max_queries: 400
-  time_budget_minutes: 75
+  # Pojistka proti nekonečným běhům (platí pro jeden běh; v Actions běží Praha a Vídeň paralelně).
+  max_queries: 1000
+  time_budget_minutes: 80
   # Kolik nabídek z každého dotazu uložit (seřazeno podle skóre).
   keep_per_query: 6
   # Zdroje: google = Google Flights (hlavní). azair = Azair.eu – vypnuto: pro termíny ~10 měsíců

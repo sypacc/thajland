@@ -1,18 +1,22 @@
-"""Hlavní běh: projde plán dotazů, ohodnotí nabídky a uloží data pro dashboard.
+"""Hlavní běh: sken (dotazy na zdroje) + finalizace (sloučení, příznaky, prodejci, hlášení, uložení).
 
-    python -m scanner.run                # plný běh dle config.yaml
-    python -m scanner.run --limit 5      # rychlý test (prvních 5 dotazů)
-    python -m scanner.run --source google
+    python -m scanner.run                         # sken + finalizace v jednom procesu (lokálně)
+    python -m scanner.run --limit 5               # rychlý test
+    python -m scanner.run --origin PRG --partial-out data/partial/PRG.json   # jen sken části plánu
+    python -m scanner.run --merge "data/partial/*.json"                      # jen finalizace z částí
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import glob
+import json
 import logging
 import random
 import statistics
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
 from . import alerts as alerts_mod
@@ -25,68 +29,53 @@ from .sources import azair, google_flights
 log = logging.getLogger("thajland")
 
 
-def _compact(o: Offer) -> dict[str, Any]:
-    return {
-        "price": o.price, "score": o.score, "airlines": o.airlines, "stops": o.stops,
-        "route": o.route, "duration_min": o.duration_min,
-        "dep_time": o.legs[0].departure if o.legs else None,
-    }
+def _compact(o: dict[str, Any]) -> dict[str, Any]:
+    return {"price": o["price"], "score": o.get("score"), "airlines": o.get("airlines", []), "stops": o.get("stops"),
+            "route": o.get("route"), "duration_min": o.get("duration_min"),
+            "dep_time": o["legs"][0]["departure"] if o.get("legs") else None}
 
 
-def run(cfg: Config, *, limit: int | None = None, only_source: str | None = None,
-        shuffle: bool = True, only_route: str | None = None) -> dict[str, Any]:
+# --------------------------------------------------------------------------- sken
+def scan(cfg: Config, *, limit: int | None = None, only_source: str | None = None, shuffle: bool = True,
+         only_route: str | None = None, only_origin: str | None = None) -> dict[str, Any]:
+    """Projde (část) plánu a vrátí {"offers": [dict], "queries": [dict], "scan": {...}}."""
     started = time.monotonic()
     today = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
-    scan = cfg.scan
-    delay = float(scan.get("delay_seconds", 2.0))
-    jitter = float(scan.get("jitter_seconds", 1.0))
-    retries = int(scan.get("retries", 3))
-    budget_s = float(scan.get("time_budget_minutes", 45)) * 60
-    max_queries = int(scan.get("max_queries", 400))
-    keep = int(scan.get("keep_per_query", 6))
-    pw_fallback = bool(scan.get("playwright_fallback", True))
+    sc = cfg.scan
+    delay = float(sc.get("delay_seconds", 2.0))
+    jitter = float(sc.get("jitter_seconds", 1.0))
+    retries = int(sc.get("retries", 3))
+    budget_s = float(sc.get("time_budget_minutes", 45)) * 60
+    max_queries = int(sc.get("max_queries", 1000))
+    keep = int(sc.get("keep_per_query", 6))
+    pw_fallback = bool(sc.get("playwright_fallback", True))
 
     sources = [s for s in ("google", "azair") if cfg.source_enabled(s)]
     if only_source:
-        sources = [s for s in sources if s == only_source] or [only_source]
+        sources = [only_source]
 
     plan = cfg.query_plan()
-    if only_route:  # např. "PRG-HKT" – diagnostika jedné trasy
+    if only_origin:
+        plan = [p for p in plan if p[0] == only_origin.upper()]
+    if only_route:
         o_, d_ = only_route.upper().split("-")
         plan = [p for p in plan if p[0] == o_ and p[1] == d_]
     if shuffle:
-        # jiné pořadí každý den => při vyčerpání rozpočtu se střídá, co se stihne
         random.Random(today).shuffle(plan)
     if limit:
         plan = plan[:limit]
     plan = plan[:max_queries]
 
-    previous = storage.load_latest() or {}
-    prev_queries = {storage.query_key(q): q for q in previous.get("queries", [])}
-    prev_offers_by_q: dict[str, list[dict[str, Any]]] = {}
-    for o in previous.get("offers", []):
-        prev_offers_by_q.setdefault(storage.query_key(o), []).append(o)
-
-    history = storage.load_history()
-    history = [h for h in history if h.get("day") != today]  # dnešek případně přepíšeme
-    minima = storage.all_time_minima(history)
-    yesterday_snap = history[-1] if history else None
-    yesterday: dict[str, int] = {}
-    if yesterday_snap:
-        for r in yesterday_snap.get("records", []):
-            if r.get("min") is not None:
-                yesterday[f"{r['o']}|{r['d']}|{r['dep']}|{r['ret']}|{r['src']}"] = r["min"]
-
-    offers: list[Offer] = []
+    offers: list[dict[str, Any]] = []
     queries: list[dict[str, Any]] = []
     consecutive_blocked = 0
     google_disabled = False
-    pw_not_found_confirmed = 0   # kolikrát Chromium potvrdilo 'bez výsledků' => dál už ho na to nevoláme
+    pw_not_found_confirmed = 0
+    # po 3 potvrzených 'bez výsledků' na trase už dotazy téže trasy neopakujeme (šetří ~10 s/dotaz)
+    route_empty: dict[str, int] = {}
     total = len(plan) * len(sources)
     done = 0
-
-    log.info("Plán: %d dotazů × %d zdrojů = %d; rozpočet %.0f min", len(plan), len(sources),
-             total, budget_s / 60)
+    log.info("Plán: %d dotazů × %d zdrojů = %d; rozpočet %.0f min", len(plan), len(sources), total, budget_s / 60)
 
     for (origin, dest, dep, ret) in plan:
         for src in sources:
@@ -98,95 +87,128 @@ def run(cfg: Config, *, limit: int | None = None, only_source: str | None = None
                 "fetched_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             }
             if time.monotonic() - started > budget_s:
-                qrec["status"] = "skipped_budget"
-                queries.append(qrec)
-                continue
+                qrec["status"] = "skipped_budget"; queries.append(qrec); continue
             if src == "google" and google_disabled:
-                qrec["status"] = "skipped_blocked"
-                queries.append(qrec)
-                continue
+                qrec["status"] = "skipped_blocked"; queries.append(qrec); continue
 
             found: list[Offer] = []
+            rk = f"{origin}-{dest}"
             try:
                 if src == "google":
+                    cheap = route_empty.get(rk, 0) >= 3
                     found, meta = google_flights.search(
                         origin, dest, dep, ret, currency=cfg.currency, cabin=cfg.cabin,
-                        max_stops=cfg.max_stops, retries=retries,
-                        playwright_fallback=pw_fallback,
-                        playwright_on_not_found=pw_not_found_confirmed < 3)
+                        max_stops=cfg.max_stops, retries=1 if cheap else retries,
+                        playwright_fallback=pw_fallback and not cheap,
+                        playwright_on_not_found=pw_not_found_confirmed < 3 and not cheap,
+                        retry_not_found=not cheap)
                     consecutive_blocked = 0
                     if (meta.get("not_found") and meta.get("method") == "playwright") or meta.get("zero_confirmed"):
                         pw_not_found_confirmed += 1
+                    if not found:
+                        route_empty[rk] = route_empty.get(rk, 0) + 1
+                    else:
+                        route_empty[rk] = 0
                 else:
                     found, meta = azair.search(origin, dest, dep, ret, currency=cfg.currency)
                 qrec["status"] = "ok" if (found and not meta.get("error")) else "empty"
-                qrec["url"] = meta.get("url")
-                qrec["error"] = meta.get("error")
-                qrec["method"] = meta.get("method")
+                qrec["url"] = meta.get("url"); qrec["error"] = meta.get("error"); qrec["method"] = meta.get("method")
             except google_flights.GoogleBlocked as e:
                 consecutive_blocked += 1
-                qrec["status"] = "error"
-                qrec["error"] = str(e)[:300]
+                qrec["status"] = "error"; qrec["error"] = str(e)[:300]
                 log.error("Google blokován/selhal (%d v řadě): %s", consecutive_blocked, e)
                 if consecutive_blocked >= 6:
                     google_disabled = True
                     log.error("Google: 6 selhání v řadě – zbytek Google dotazů přeskočen.")
             except Exception as e:  # noqa: BLE001
-                qrec["status"] = "error"
-                qrec["error"] = f"{type(e).__name__}: {e}"[:300]
+                qrec["status"] = "error"; qrec["error"] = f"{type(e).__name__}: {e}"[:300]
                 log.exception("Dotaz %s %s-%s %s selhal", src, origin, dest, dep)
 
             for o in found:
                 score_offer(o, cfg.scoring)
             found = rank(found)[:keep]
-            qk = storage.query_key(qrec)
             if found:
-                qrec["count"] = len(found)
-                qrec["min_price"] = min(o.price for o in found)
-                qrec["best_score"] = min(o.score for o in found if o.score is not None)
-                qrec["top"] = _compact(found[0])
-                prev_min = minima.get(qk, {}).get("min")
-                qrec["all_time_min"] = prev_min
-                qrec["yesterday_min"] = yesterday.get(qk)
-                offers.extend(found)
+                dicts = [o.to_dict() for o in found]
+                qrec["count"] = len(dicts)
+                qrec["min_price"] = min(o["price"] for o in dicts)
+                qrec["best_score"] = min(o["score"] for o in dicts if o.get("score") is not None)
+                qrec["top"] = _compact(dicts[0])
+                offers.extend(dicts)
             queries.append(qrec)
-            log.info("[%d/%d] %s %s→%s %s..%s: %s (%d nabídek, min %s)", done, total, src,
-                     origin, dest, dep, ret, qrec["status"], qrec["count"], qrec["min_price"])
+            log.info("[%d/%d] %s %s→%s %s..%s: %s (%d nabídek, min %s)", done, total, src, origin, dest, dep, ret,
+                     qrec["status"], qrec["count"], qrec["min_price"])
             time.sleep(delay + random.random() * jitter)
 
-    # Dotazy, které se dnes nestihly / selhaly: přeneseme včerejší výsledek jako "stale"
+    return {"offers": offers, "queries": queries,
+            "scan": {"duration_s": int(time.monotonic() - started), "google_disabled": google_disabled,
+                     "origin": only_origin, "day": today}}
+
+
+# --------------------------------------------------------------------------- finalizace
+def finalize(cfg: Config, parts: list[dict[str, Any]], *, enrich: bool = True) -> dict[str, Any]:
+    """Sloučí části skenu, doplní stará data za chybějící dotazy, příznaky, prodejce a statistiky."""
+    started = time.monotonic()
+    today = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
+    offers: list[dict[str, Any]] = []
+    queries: list[dict[str, Any]] = []
+    duration = 0
+    google_disabled = False
+    for p in parts:
+        offers.extend(p.get("offers", []))
+        queries.extend(p.get("queries", []))
+        duration = max(duration, int(p.get("scan", {}).get("duration_s", 0)))
+        google_disabled = google_disabled or bool(p.get("scan", {}).get("google_disabled"))
+
+    previous = storage.load_latest() or {}
+    prev_queries = {storage.query_key(q): q for q in previous.get("queries", [])}
+    prev_offers_by_q: dict[str, list[dict[str, Any]]] = {}
+    for o in previous.get("offers", []):
+        prev_offers_by_q.setdefault(storage.query_key(o), []).append(o)
+
+    history = [h for h in storage.load_history() if h.get("day") != today]
+    minima = storage.all_time_minima(history)
+    yesterday: dict[str, int] = {}
+    if history:
+        for r in history[-1].get("records", []):
+            if r.get("min") is not None:
+                yesterday[f"{r['o']}|{r['d']}|{r['dep']}|{r['ret']}|{r['src']}"] = r["min"]
+    seen_keys = set(minima.keys())
+    seen_routes = {k.split("|")[0] + "-" + k.split("|")[1] for k in seen_keys}
+
+    # dotazy, které dnes neproběhly / selhaly: převzít poslední známý výsledek jako 'stale'
     carried = 0
-    for q in queries:
+    for i, q in enumerate(queries):
         if q["status"] in ("skipped_budget", "skipped_blocked", "error"):
             pq = prev_queries.get(storage.query_key(q))
             if pq and pq.get("status") == "ok":
-                stale_q = dict(pq)
-                stale_q["stale"] = True
-                stale_q["status"] = "ok"
-                stale_q["stale_reason"] = q["status"]
-                q.clear()
-                q.update(stale_q)
+                stale_q = dict(pq, stale=True, status="ok", stale_reason=q["status"])
+                queries[i] = stale_q
                 for po in prev_offers_by_q.get(storage.query_key(q), []):
-                    po = dict(po)
-                    po["stale"] = True
-                    offers.append(_offer_from_dict(po))
+                    offers.append(dict(po, stale=True))
                 carried += 1
 
-    # Flagy na nabídkách (vs. včera / historické minimum)
-    offer_dicts = []
+    # příznaky na nabídkách
     for o in offers:
-        d = o.to_dict()
-        qk = storage.query_key(d)
-        d["yesterday_min"] = yesterday.get(qk)
-        d["all_time_min"] = minima.get(qk, {}).get("min")
-        d["is_all_time_low"] = (o.price <= d["all_time_min"]) if d["all_time_min"] is not None else None
-        d["stale"] = bool(getattr(o, "_stale", False))
-        offer_dicts.append(d)
+        qk = storage.query_key(o)
+        o["yesterday_min"] = yesterday.get(qk)
+        o["all_time_min"] = minima.get(qk, {}).get("min")
+        o["is_all_time_low"] = (o["price"] <= o["all_time_min"]) if o["all_time_min"] is not None else None
+        o["stale"] = bool(o.get("stale"))
+        # nově v prodeji: termín (nebo celá trasa) se v historii (>=3 běhy) nikdy neobjevil
+        o["is_new"] = bool(len(history) >= 3 and qk not in seen_keys and not o["stale"])
+        o["is_new_route"] = bool(o["is_new"] and f"{o['origin']}-{o['destination']}" not in seen_routes)
+    for q in queries:
+        if q.get("status") == "ok" and q.get("count"):
+            qk = storage.query_key(q)
+            q["all_time_min"] = minima.get(qk, {}).get("min")
+            q["yesterday_min"] = yesterday.get(qk)
+            q["is_new"] = bool(len(history) >= 3 and qk not in seen_keys and not q.get("stale"))
 
-    # Experimentální: prodejci (aerolinka / cestovky) pro nejlepší dealy
-    enrich_n = int(scan.get("enrich_sellers_top", 0)) if scan.get("enrich_sellers") else 0
-    if enrich_n and not google_disabled and offer_dicts:
-        _enrich_sellers(offer_dicts, enrich_n, budget_s - (time.monotonic() - started))
+    # prodejci pro nejlepší dealy
+    sc = cfg.scan
+    enrich_n = int(sc.get("enrich_sellers_top", 0)) if (enrich and sc.get("enrich_sellers")) else 0
+    if enrich_n and not google_disabled and offers:
+        _enrich_sellers(offers, enrich_n, 900)
 
     ok = [q for q in queries if q["status"] == "ok" and not q.get("stale")]
     prices = [q["min_price"] for q in queries if q.get("min_price")]
@@ -194,14 +216,14 @@ def run(cfg: Config, *, limit: int | None = None, only_source: str | None = None
         "queries_total": len(queries), "queries_ok": len(ok),
         "queries_error": sum(1 for q in queries if q["status"] == "error"),
         "queries_skipped": sum(1 for q in queries if str(q["status"]).startswith("skipped")),
-        "queries_stale": carried,
-        "offers": len(offer_dicts),
+        "queries_stale": carried, "queries_new": sum(1 for q in queries if q.get("is_new")),
+        "offers": len(offers),
         "min_price": min(prices) if prices else None,
         "median_min_price": int(statistics.median(prices)) if prices else None,
-        "duration_s": int(time.monotonic() - started),
-        "google_disabled": google_disabled,
+        "duration_s": duration + int(time.monotonic() - started),
+        "google_disabled": google_disabled, "parts": len(parts),
     }
-    payload = {
+    return {
         "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "day": today,
         "config": {
@@ -209,64 +231,57 @@ def run(cfg: Config, *, limit: int | None = None, only_source: str | None = None
             "depart_from": cfg.depart_from.isoformat(), "depart_to": cfg.depart_to.isoformat(),
             "depart_step_days": cfg.depart_step_days, "trip_lengths": cfg.trip_lengths,
             "travelers": cfg.travelers, "currency": cfg.currency, "cabin": cfg.cabin,
-            "max_stops": cfg.max_stops, "sources": sources, "scoring": cfg.scoring,
+            "max_stops": cfg.max_stops, "sources": [s for s in ("google", "azair") if cfg.source_enabled(s)],
+            "scoring": cfg.scoring, "alerts": {"target_price": cfg.raw.get("alerts", {}).get("target_price")},
         },
-        "stats": stats,
-        "queries": queries,
-        "offers": offer_dicts,
+        "stats": stats, "queries": queries, "offers": offers,
     }
-    return payload
 
 
-def _enrich_sellers(offer_dicts: list[dict[str, Any]], n: int, remaining_s: float) -> None:
-    if remaining_s < 120:
-        log.info("Prodejci: přeskočeno (vyčerpaný časový rozpočet)")
-        return
-    fresh = [o for o in offer_dicts if o["source"] == "google" and not o.get("stale") and o.get("score") is not None]
+def _enrich_sellers(offers: list[dict[str, Any]], n: int, budget_s: float) -> None:
+    fresh = [o for o in offers if o["source"] == "google" and not o.get("stale") and o.get("score") is not None]
     fresh.sort(key=lambda o: o["score"])
     seen: set[tuple] = set()
     picked = []
     for o in fresh:
-        key = (o["depart_date"], o["return_date"], o["price"], tuple(o.get("airlines") or []), o["route"])
+        key = (o["depart_date"], o["price"], tuple(o.get("airlines") or []), o["route"])
         if key in seen:
             continue
-        seen.add(key)
-        picked.append(o)
+        seen.add(key); picked.append(o)
         if len(picked) >= n:
             break
     t0 = time.monotonic()
     for o in picked:
-        if time.monotonic() - t0 > min(remaining_s - 60, 600):
+        if time.monotonic() - t0 > budget_s:
             break
         try:
             sellers, err, insight = google_flights.fetch_sellers(o["links"]["google"], o["price"],
                                                                  (o.get("airlines") or [None])[0])
         except Exception as e:  # noqa: BLE001
             sellers, err, insight = [], f"{type(e).__name__}: {e}", None
-        o["sellers"] = sellers
-        o["sellers_error"] = err
+        o["sellers"] = sellers; o["sellers_error"] = err
         if insight:
             o["price_insight"] = insight
         log.info("Prodejci %s %s %s: %s | insight %s", o["route"], o["depart_date"], o["price"],
                  ", ".join(f"{x['name']} {x['price']}" for x in sellers) or err, insight)
-        time.sleep(8 + random.random() * 4)   # šetrně – Google jinak vrací 'něco se pokazilo'
+        time.sleep(8 + random.random() * 4)
 
 
-def _offer_from_dict(d: dict[str, Any]) -> Offer:
-    from .model import Layover, Leg
-    o = Offer(
-        source=d["source"], origin=d["origin"], destination=d["destination"],
-        depart_date=d["depart_date"], return_date=d["return_date"], nights=d["nights"],
-        price=d["price"], currency=d["currency"], airlines=d.get("airlines", []),
-        stops=d.get("stops", 0),
-        legs=[Leg(**l) for l in d.get("legs", [])],
-        layovers=[Layover(**l) for l in d.get("layovers", [])],
-        duration_min=d.get("duration_min"), layover_total_min=d.get("layover_total_min", 0),
-        note=d.get("note"), links=d.get("links", {}), score=d.get("score"),
-        score_breakdown=d.get("score_breakdown", {}), fetched_at=d.get("fetched_at"),
-    )
-    o._stale = True  # type: ignore[attr-defined]
-    return o
+def save_all(cfg: Config, payload: dict[str, Any], *, notify: bool = True) -> None:
+    history = [h for h in storage.load_history() if h.get("day") != payload["day"]]
+    existing = alerts_mod.load_alerts()
+    new_alerts = alerts_mod.detect(payload, history, cfg.raw.get("alerts", {}), existing)
+    payload["alerts_today"] = new_alerts
+    log.info("Hlášení: %d nových", len(new_alerts))
+    for a in new_alerts:
+        log.info("  %s %s %s→%s %s: %s", a["kind_label"], a["price"], a["origin"], a["destination"],
+                 a["depart_date"], a["reason"])
+    storage.save_latest(payload)
+    storage.save_history_snapshot(payload["day"], payload["queries"])
+    storage.save_series(storage.build_series(storage.load_history()))
+    alerts_mod.save_alerts(existing + new_alerts)
+    if new_alerts and notify:
+        alerts_mod.notify(new_alerts, payload, cfg.raw.get("alerts", {}).get("channels", {}))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -276,7 +291,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--source", default=None, choices=["google", "azair"])
     ap.add_argument("--no-shuffle", action="store_true")
     ap.add_argument("--route", default=None, help="jen jedna trasa, např. PRG-HKT (diagnostika)")
+    ap.add_argument("--origin", default=None, help="jen jedno odletové letiště (paralelní běhy)")
     ap.add_argument("--max-stops", default=None, help="přepsat trip.max_stops (číslo nebo 'none')")
+    ap.add_argument("--partial-out", default=None, help="jen sken: uložit část výsledků do JSON a skončit")
+    ap.add_argument("--merge", default=None, help="jen finalizace: glob na částečné JSONy")
+    ap.add_argument("--no-enrich", action="store_true", help="nenačítat prodejce")
     ap.add_argument("--no-save", action="store_true")
     ap.add_argument("--no-notify", action="store_true", help="hlášení jen uložit, neposílat")
     ap.add_argument("-v", "--verbose", action="store_true")
@@ -287,30 +306,33 @@ def main(argv: list[str] | None = None) -> int:
     cfg = load_config(args.config)
     if args.max_stops is not None:
         cfg.raw["trip"]["max_stops"] = None if str(args.max_stops).lower() == "none" else int(args.max_stops)
-    payload = run(cfg, limit=args.limit, only_source=args.source, shuffle=not args.no_shuffle,
-                  only_route=args.route)
+
+    if args.merge:
+        parts = []
+        for f in sorted(glob.glob(args.merge)):
+            parts.append(json.loads(Path(f).read_text(encoding="utf-8")))
+            log.info("část %s: %d dotazů, %d nabídek", f, len(parts[-1]["queries"]), len(parts[-1]["offers"]))
+        if not parts:
+            log.error("Žádné části k finalizaci (%s)", args.merge)
+            return 2
+    else:
+        part = scan(cfg, limit=args.limit, only_source=args.source, shuffle=not args.no_shuffle,
+                    only_route=args.route, only_origin=args.origin)
+        log.info("Sken hotov: %d dotazů, %d nabídek, %d s", len(part["queries"]), len(part["offers"]),
+                 part["scan"]["duration_s"])
+        if args.partial_out:
+            p = Path(args.partial_out); p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(part, ensure_ascii=False), encoding="utf-8")
+            log.info("Část uložena: %s", p)
+            return 0
+        parts = [part]
+
+    payload = finalize(cfg, parts, enrich=not args.no_enrich)
     st = payload["stats"]
     log.info("Hotovo: %s", st)
-
     if args.no_save:
         return 0
-    # Hlášení (dealy) – počítá se proti historii BEZ dnešního dne
-    history = [h for h in storage.load_history() if h.get("day") != payload["day"]]
-    existing = alerts_mod.load_alerts()
-    new_alerts = alerts_mod.detect(payload, history, cfg.raw.get("alerts", {}), existing)
-    payload["alerts_today"] = new_alerts
-    log.info("Hlášení: %d nových", len(new_alerts))
-    for a in new_alerts:
-        log.info("  %s %s %s→%s %s: %s", a["kind_label"], a["price"], a["origin"], a["destination"],
-                 a["depart_date"], a["reason"])
-
-    storage.save_latest(payload)
-    storage.save_history_snapshot(payload["day"], payload["queries"])
-    storage.save_series(storage.build_series(storage.load_history()))
-    alerts_mod.save_alerts(existing + new_alerts)
-    if new_alerts and not args.no_notify:
-        alerts_mod.notify(new_alerts, payload, cfg.raw.get("alerts", {}).get("channels", {}))
-    # Neúspěch celého běhu = vůbec žádná data (např. blokace). Jinak 0.
+    save_all(cfg, payload, notify=not args.no_notify)
     return 0 if st["queries_ok"] or st["queries_stale"] else 2
 
 

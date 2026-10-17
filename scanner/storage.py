@@ -68,10 +68,15 @@ def load_history() -> list[dict[str, Any]]:
     return out
 
 
-def build_series(history: list[dict[str, Any]]) -> dict[str, Any]:
-    """Série pro grafy: po dnech minimální cena / skóre za (origin,dest) a za konkrétní termín."""
+def build_series(history: list[dict[str, Any]], query_days: int = 90) -> dict[str, Any]:
+    """Série pro grafy: po dnech minimální cena / skóre za (origin,dest) a za konkrétní termín.
+
+    Historie konkrétních termínů se drží jen pro posledních `query_days` běhů (velikost souboru),
+    historie tras je kompletní.
+    """
     days = []
-    for snap in history:
+    keep_from = len(history) - query_days
+    for idx, snap in enumerate(history):
         per_route: dict[str, dict[str, Any]] = {}
         per_query: list[list[Any]] = []
         for r in snap.get("records", []):
@@ -83,7 +88,8 @@ def build_series(history: list[dict[str, Any]]) -> dict[str, Any]:
                 cur["min"] = r["min"]
             if r.get("best") is not None and (cur["best"] is None or r["best"] < cur["best"]):
                 cur["best"] = r["best"]
-            per_query.append([r["o"], r["d"], r["dep"], r["ret"], r["src"], r["min"], r.get("best")])
+            if idx >= keep_from:
+                per_query.append([r["o"], r["d"], r["dep"], r["ret"], r["src"], r["min"], r.get("best")])
         days.append({"day": snap["day"], "routes": per_route, "queries": per_query})
     return {"days": days}
 

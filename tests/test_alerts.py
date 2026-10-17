@@ -58,3 +58,13 @@ def test_max_per_run_and_more_counter():
     offers = [_offer(14000 + i * 10, dep=f"2027-08-{10 + i:02d}", oid=f"o{i}") for i in range(12)]
     out = alerts.detect({"day": "2026-10-21", "offers": offers}, [], dict(CFG, max_per_run=5))
     assert len(out) == 5 and out[-1]["more"] == 7
+
+
+def test_new_availability_alerts_aggregate_per_route():
+    o1 = dict(_offer(18000, dep="2027-09-03", oid="n1"), is_new=True)
+    o2 = dict(_offer(17500, dep="2027-09-06", oid="n2"), is_new=True)
+    o3 = dict(_offer(16000, dep="2027-08-10", dest="HKT", oid="n3"), is_new=True, is_new_route=True)
+    out = alerts.detect({"day": "2026-10-21", "offers": [o1, o2, o3]}, [], dict(CFG, target_price=0))
+    kinds = {a["kind"]: a for a in out}
+    assert kinds["new_dates"]["new_dates"] == 2 and kinds["new_dates"]["price"] == 17500
+    assert kinds["new_route"]["destination"] == "HKT"

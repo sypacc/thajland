@@ -186,6 +186,12 @@
       const first = minOf(days[Math.max(0, days.length - 8)]), last = minOf(days[days.length - 1]);
       if (isFinite(first) && isFinite(last)) { const pct = (last - first) / first * 100; out.push(Math.abs(pct) < 3 ? `Za posledních ${Math.min(7, days.length - 1)} dní je nejnižší cena stabilní (${czk(last)}).` : pct < 0 ? `Nejnižší cena za posledních ${Math.min(7, days.length - 1)} dní <strong>klesla o ${Math.abs(pct).toFixed(0)} %</strong> (${czk(first)} → ${czk(last)}).` : `Nejnižší cena za posledních ${Math.min(7, days.length - 1)} dní <strong>vzrostla o ${pct.toFixed(0)} %</strong> (${czk(first)} → ${czk(last)}).`); }
     }
+    // nově v prodeji
+    const newQ = queries.filter((q) => q.is_new);
+    if (newQ.length) {
+      const byR = {}; for (const q of newQ) (byR[`${q.origin}→${q.destination}`] ||= []).push(q);
+      out.push(`<strong>Nově v prodeji od minula:</strong> ${Object.entries(byR).map(([r, qs]) => `${routeName(r)} ${[...new Set(qs.map((q) => q.depart_date))].length} dnů odletu (od ${czk(Math.min(...qs.map((q) => q.min_price)))})`).join("; ")}.`);
+    }
     // trasy úplně bez nabídek
     for (const r of routeOrder) if (!fresh.some((o) => o._rk === r)) {
       const [o, d] = r.split("→");
@@ -210,6 +216,8 @@
   function badges(o) {
     const b = [];
     b.push(el("span", { class: "badge " + (o.stops === 0 ? "good" : o.stops >= 2 ? "warn" : "") }, o.stops === 0 ? "přímý let" : o.stops === 1 ? "1 přestup" : `${o.stops} přestupy`));
+    if (o.is_new_route) b.push(el("span", { class: "badge good" }, "nová trasa v prodeji"));
+    else if (o.is_new) b.push(el("span", { class: "badge good" }, "nově v prodeji"));
     if (o.is_all_time_low) b.push(el("span", { class: "badge good" }, "nejnižší cena dosud"));
     if (o.yesterday_min != null && o.price < o.yesterday_min) b.push(el("span", { class: "badge good" }, `↓ ${czk(o.yesterday_min - o.price)} od minula`));
     if (o.yesterday_min != null && o.price > o.yesterday_min) b.push(el("span", { class: "badge bad" }, `↑ ${czk(o.price - o.yesterday_min)} od minula`));
@@ -312,45 +320,52 @@
     const box = $("#calendar"); box.innerHTML = "";
     const planDates = [...new Set(queries.map((q) => q.depart_date))].sort();
     if (!planDates.length) { box.append(el("div", { class: "empty" }, "Žádné termíny.")); return; }
-    const cellMin = {}; const cellStale = {}; const cellStatus = {};
-    for (const q of queries) { const k = `${q.origin}→${q.destination}|${q.depart_date}`; cellStatus[k] = cellStatus[k] === "ok" ? "ok" : (q.status === "ok" && q.count ? "ok" : q.status === "empty" ? (cellStatus[k] || "empty") : (cellStatus[k] || q.status)); }
+    const cellMin = {}, cellStale = {}, cellStatus = {}, cellNew = {};
+    for (const q of queries) {
+      const k = `${q.origin}→${q.destination}|${q.depart_date}`;
+      const st = q.status === "ok" && q.count ? "ok" : q.status === "empty" ? "empty" : q.status;
+      cellStatus[k] = cellStatus[k] === "ok" || st === "ok" ? "ok" : (cellStatus[k] === "empty" || st === "empty" ? "empty" : st);
+      if (q.is_new) cellNew[k] = true;
+    }
     for (const o of offers) { const k = `${o._rk}|${o.depart_date}`; if (o.price < (cellMin[k] ?? Infinity)) { cellMin[k] = o.price; cellStale[k] = !!o.stale; } }
     const vals = Object.values(cellMin); const lo = Math.min(...vals), hi = Math.max(...vals);
-    const table = el("table", { class: "cal" });
-    // měsíce
-    const mrow = el("tr", null, el("th"));
-    let prevM = null, span = 0, cellM = null;
-    for (const d of planDates) { const m = +d.slice(5, 7); if (m !== prevM) { if (cellM) cellM.setAttribute("colspan", span); cellM = el("th", { class: "month" }, MONTHS[m]); mrow.append(cellM); span = 0; prevM = m; } span++; }
-    if (cellM) cellM.setAttribute("colspan", span);
-    table.append(mrow);
-    table.append(el("tr", null, el("th"), planDates.map((d) => el("th", null, el("div", null, dday(d) + "."), el("div", { class: "muted" }, wd(d))))));
     const globalMin = Math.min(...fresh.map((o) => o.price), Infinity);
-    for (const r of routeOrder) {
-      const tr = el("tr", null, el("th", { class: "row" }, el("span", { style: `color:${routeColor(r)}` }, "● "), routeName(r)));
-      for (const d of planDates) {
-        const k = `${r}|${d}`; const v = cellMin[k]; const st = cellStatus[k];
-        let c;
-        if (v == null) c = el("div", { class: "cell " + (st === "empty" ? "nosale" : "none"), title: st === "empty" ? `${routeName(r)} ${dcz(d)}: Google zatím nenabízí žádné spojení (typicky ještě neotevřený prodej)` : `${routeName(r)} ${dcz(d)}: nezjištěno (dotaz neproběhl)` }, st === "empty" ? "·" : "?");
-        else {
-          const p = hi > lo ? 90 - ((v - lo) / (hi - lo)) * 80 : 50;
-          c = el("div", { class: "cell" + (p > 55 ? " dark" : "") + (cellStale[k] ? " stale" : "") + (v === globalMin ? " min" : ""), style: `--p:${p.toFixed(0)}%`, title: `${routeName(r)} · odlet ${dcz(d)}: od ${czk(v)}/os${cellStale[k] ? " (starší data)" : ""}` }, kcs(v));
-          c.addEventListener("click", () => { selectedCell = selectedCell === k ? null : k; renderCalendar(); renderCalendarDetail(r, d); });
-          if (selectedCell === k) c.classList.add("sel");
+    const months = [...new Set(planDates.map((d) => d.slice(0, 7)))];
+    for (const ym of months) {
+      const dates = planDates.filter((d) => d.startsWith(ym));
+      const table = el("table", { class: "cal" });
+      table.append(el("tr", null, el("th", { class: "month" }, MONTHS[+ym.slice(5, 7)] + " " + ym.slice(0, 4)), dates.map((d) => el("th", { class: wd(d) === "so" || wd(d) === "ne" ? "wknd" : null }, el("div", null, dday(d) + "."), el("div", { class: "muted" }, wd(d))))));
+      for (const r of routeOrder) {
+        const tr = el("tr", null, el("th", { class: "row" }, el("span", { style: `color:${routeColor(r)}` }, "● "), routeName(r)));
+        for (const d of dates) {
+          const k = `${r}|${d}`; const v = cellMin[k]; const st = cellStatus[k];
+          let c;
+          if (v == null) c = el("div", { class: "cell " + (st === "empty" ? "nosale" : "none"), title: st === "empty" ? `${routeName(r)} ${dcz(d)}: Google zatím nenabízí žádné spojení (typicky ještě neotevřený prodej)` : `${routeName(r)} ${dcz(d)}: nezjištěno (dotaz neproběhl)` }, st === "empty" ? "·" : "?");
+          else {
+            const p = hi > lo ? 90 - ((v - lo) / (hi - lo)) * 80 : 50;
+            c = el("div", { class: "cell" + (p > 55 ? " dark" : "") + (cellStale[k] ? " stale" : "") + (v === globalMin ? " min" : "") + (cellNew[k] ? " new" : ""), style: `--p:${p.toFixed(0)}%`, title: `${routeName(r)} · odlet ${dcz(d)}: od ${czk(v)}/os${cellNew[k] ? " · nově v prodeji" : ""}${cellStale[k] ? " (starší data)" : ""}` }, kcs(v));
+            c.addEventListener("click", () => { selectedCell = selectedCell === k ? null : k; renderCalendar(); renderCalendarDetail(r, d); });
+            if (selectedCell === k) c.classList.add("sel");
+          }
+          tr.append(el("td", null, c));
         }
-        tr.append(el("td", null, c));
+        table.append(tr);
       }
-      table.append(tr);
+      box.append(table);
     }
-    box.append(table);
     const L = $("#calendarLegend"); L.innerHTML = "";
-    L.append("Cena v tisících Kč/os: nejlevnější", el("i", { class: "ramp" }), "nejdražší", el("span", { style: "--c:transparent; margin-left:14px" }, "· = Google zatím nenabízí spojení (typicky neotevřený prodej)"), el("span", { style: "--c:transparent" }, "★ = nejnižší cena skenu"), el("span", { style: "--c:transparent" }, "bledé = starší data"));
+    L.append("Cena v tisících Kč/os (nejlevnější ze všech délek pobytu): nejlevnější", el("i", { class: "ramp" }), "nejdražší",
+      el("span", { style: "--c:transparent; margin-left:14px" }, "· = Google zatím nenabízí spojení (typicky neotevřený prodej)"),
+      el("span", { style: "--c:transparent" }, "★ = nejnižší cena skenu"), el("span", { style: "--c:var(--good)" }, "zelený rámeček = nově v prodeji"), el("span", { style: "--c:transparent" }, "bledé = starší data"));
   }
   function renderCalendarDetail(r, d) {
     const box = $("#calendarDetail");
     if (!selectedCell) { box.hidden = true; box.innerHTML = ""; return; }
     box.hidden = false; box.innerHTML = "";
-    const list = sortBy(offers.filter((o) => o._rk === r && o.depart_date === d && o.score != null), "score").slice(0, 3);
-    box.append(el("div", { class: "panel-head" }, el("h2", null, `${routeName(r)} · odlet ${wd(d)} ${dcz(d)}`), el("span", { class: "muted small" }, `${list.length} nejlepší nabídky pro tento den`)));
+    const dayOffers = offers.filter((o) => o._rk === r && o.depart_date === d && o.score != null);
+    const list = sortBy(dayOffers, "score").slice(0, 3);
+    const perLen = cfg.trip_lengths.map((n) => { const xs = dayOffers.filter((o) => o.nights === n); return `${n} dní: ${xs.length ? czk(Math.min(...xs.map((o) => o.price))) : "–"}`; }).join(" · ");
+    box.append(el("div", { class: "panel-head" }, el("h2", null, `${routeName(r)} · odlet ${wd(d)} ${dcz(d)}`), el("span", { class: "muted small" }, `nejnižší cena podle délky pobytu: ${perLen}`)));
     box.append(el("div", { class: "cards" }, list.map((o, i) => card(o, i))));
   }
 

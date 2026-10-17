@@ -199,7 +199,7 @@ def _fetch_html_playwright(url: str, timeout_ms: int = 45000) -> str:
 def search(origin: str, dest: str, depart: dt.date, ret: dt.date, *, currency: str = "CZK",
            cabin: str = "economy", max_stops: int | None = None, retries: int = 3,
            playwright_fallback: bool = True, playwright_on_not_found: bool = True,
-           adults: int = 1) -> tuple[list[Offer], dict[str, Any]]:
+           retry_not_found: bool = True, adults: int = 1) -> tuple[list[Offer], dict[str, Any]]:
     """Vrátí (nabídky, meta). Nabídky = odletové itineráře s celkovou cenou zpáteční letenky."""
     q = make_query(origin, dest, depart, ret, currency=currency, cabin=cabin,
                    max_stops=max_stops, adults=adults)
@@ -239,7 +239,7 @@ def search(origin: str, dest: str, depart: dt.date, ret: dt.date, *, currency: s
                 _debug_dump(f"google_error_{origin}-{dest}_{depart}_{attempt}.html", html)  # type: ignore[name-defined]
             except Exception:
                 pass
-            if not_found >= 2:
+            if not_found >= 2 or not retry_not_found:
                 results = None
                 break
             time.sleep(6 + 2 * attempt)

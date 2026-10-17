@@ -102,3 +102,35 @@ Typické rozpětí
     sellers, insight = _parse_booking_options(txt)
     assert sellers == [{"name": "Emirates", "price": 19477}, {"name": "Kiwi.com", "price": 18980}]
     assert insight == {"level": "typická", "low": 14500, "high": 33500}
+
+
+def test_finalize_merges_parts_and_flags(tmp_path, monkeypatch):
+    from scanner import run as runmod
+    from scanner.config import Config
+    monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(storage, "HISTORY_DIR", tmp_path / "history")
+    cfg = Config(raw={"trip": {"origins": ["PRG", "VIE"], "destinations": ["BKK"], "depart_from": "2027-08-01",
+                               "depart_to": "2027-08-02", "depart_step_days": 1, "trip_lengths": [14]},
+                      "scan": {"enrich_sellers": False}, "scoring": {}})
+    def q(o, dep, status="ok", price=20000):
+        return {"origin": o, "destination": "BKK", "depart_date": dep, "return_date": "2027-08-15",
+                "source": "google", "status": status, "count": 1 if status == "ok" else 0,
+                "min_price": price if status == "ok" else None, "best_score": price, "top": None}
+    def off(o, dep, price=20000):
+        return {"id": f"{o}{dep}", "source": "google", "origin": o, "destination": "BKK", "depart_date": dep,
+                "return_date": "2027-08-15", "nights": 14, "price": price, "currency": "CZK", "airlines": ["X"],
+                "stops": 1, "legs": [], "layovers": [], "duration_min": 900, "score": price, "links": {}}
+    # 3 dny historie jen pro PRG 08-01 -> PRG 08-02 a VIE budou 'nově v prodeji'
+    for day in ("2026-10-10", "2026-10-11", "2026-10-12"):
+        storage.save_history_snapshot(day, [q("PRG", "2027-08-01", price=21000)])
+    parts = [{"offers": [off("PRG", "2027-08-01", 19000), off("PRG", "2027-08-02")],
+              "queries": [q("PRG", "2027-08-01", price=19000), q("PRG", "2027-08-02")], "scan": {"duration_s": 10}},
+             {"offers": [off("VIE", "2027-08-01")], "queries": [q("VIE", "2027-08-01"), q("VIE", "2027-08-02", "error")],
+              "scan": {"duration_s": 12}}]
+    payload = runmod.finalize(cfg, parts, enrich=False)
+    assert payload["stats"]["queries_total"] == 4 and payload["stats"]["offers"] == 3
+    by = {o["id"]: o for o in payload["offers"]}
+    assert by["PRG2027-08-01"]["is_all_time_low"] is True and by["PRG2027-08-01"]["is_new"] is False
+    assert by["PRG2027-08-02"]["is_new"] is True and by["PRG2027-08-02"]["is_new_route"] is False
+    assert by["VIE2027-08-01"]["is_new"] is True and by["VIE2027-08-01"]["is_new_route"] is True
+    assert payload["stats"]["queries_new"] == 2
