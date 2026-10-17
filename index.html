@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Thajsko 2027 – letenky</title>
 <meta name="description" content="Denní přehled cen letenek z Česka do Thajska na 2 týdny v srpnu–září 2027: verdikt, nejlepší nabídky, kalendář cen a vývoj v čase.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="assets/style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
@@ -12,7 +15,8 @@
 <header class="top">
   <div class="wrap">
     <div class="brand">
-      <h1>Thajsko 2027 <span class="muted">· letenky z Česka · 2 týdny · srpen–září</span></h1>
+      <div class="kicker">🌴 Sledování letenek</div>
+      <h1>Thajsko 2027 <span class="sub">z Česka · 2 týdny · srpen–září</span></h1>
       <div id="status" class="status">Načítám data…</div>
     </div>
     <nav class="nav" aria-label="Sekce">
@@ -27,9 +31,10 @@
 
   <!-- 1b. Sledované lety -->
   <section id="watch" class="panel watch">
-    <div class="panel-head"><h2>Sledované lety</h2><span id="watchMeta" class="muted small"></span></div>
-    <p class="muted small">Tyhle lety mají ve skenu prioritu, vlastní historii ceny a hlášení při každé změně. Automaticky se sem dostane pár nejlepších dealů; cokoliv dalšího přidáš tlačítkem <strong>Sledovat</strong> u nabídky.</p>
-    <div id="watchList" class="cards"></div>
+    <div class="panel-head"><h2><span class="ico">★</span> Sledované lety</h2><span id="watchMeta" class="muted small"></span></div>
+    <p class="intro">Tyhle lety se kontrolují jako první, mají vlastní křivku ceny a přijde hlášení, když zlevní, zdraží nebo zmizí. Nahoře je <strong>výběr skeneru</strong> (nejlepší poměr cena/výkon), pod ním <strong>tvoje piny</strong>.</p>
+    <div id="watchAuto"></div>
+    <div id="watchManual"></div>
     <div id="localPins" class="localpins"></div>
   </section>
 
@@ -38,14 +43,14 @@
 
   <!-- 3. Hlášení -->
   <section id="alertsPanel" class="panel" aria-label="Hlášení">
-    <div class="panel-head"><h2>Hlášení</h2><span id="alertsMeta" class="muted small"></span></div>
+    <div class="panel-head"><h2><span class="ico">🔔</span> Hlášení</h2><span id="alertsMeta" class="muted small"></span></div>
     <div id="alerts" class="alerts"></div>
   </section>
 
   <!-- 4. Nejlepší nabídky -->
   <section class="panel" id="deals">
     <div class="panel-head">
-      <h2>Nejlepší nabídky teď</h2>
+      <h2><span class="ico">✈️</span> Nejlepší nabídky teď</h2>
       <div id="dealTabs" class="tabs" role="tablist"></div>
     </div>
     <p class="muted small" id="dealsHint"></p>
@@ -54,7 +59,7 @@
 
   <!-- 5. Kalendář cen -->
   <section class="panel" id="calendarPanel">
-    <div class="panel-head"><h2>Kalendář cen</h2><span class="muted small">nejnižší cena/os pro den odletu · klikni na políčko</span></div>
+    <div class="panel-head"><h2><span class="ico">📅</span> Kalendář cen</h2><span class="muted small">nejnižší cena/os pro den odletu · klikni na políčko</span></div>
     <div id="calendar" class="calendar"></div>
     <div id="calendarLegend" class="legend small"></div>
     <div id="calendarDetail" class="cal-detail" hidden></div>
@@ -62,7 +67,7 @@
 
   <!-- 6. Trend -->
   <section class="panel" id="trend">
-    <div class="panel-head"><h2>Vývoj ceny v čase</h2><span id="trendMeta" class="muted small"></span></div>
+    <div class="panel-head"><h2><span class="ico">📈</span> Vývoj ceny v čase</h2><span id="trendMeta" class="muted small"></span></div>
     <div class="table-wrap">
       <table id="overview">
         <thead><tr><th>Trasa</th><th>Dnes</th><th>vs. minule</th><th>vs. 7 dní</th><th>vs. 30 dní</th><th>Minimum</th><th>Maximum</th><th>Vývoj</th><th>Verdikt</th></tr></thead>

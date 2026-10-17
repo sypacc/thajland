@@ -29,12 +29,20 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body { background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+body { background: var(--bg); color: var(--text); font: 15px/1.5 "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
 .wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
-.top { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 0 12px; }
-h1 { font-size: 1.3rem; margin: 0 0 4px; }
-h1 .muted { font-weight: 400; font-size: .95rem; }
-h2 { font-size: 1.05rem; margin: 0; }
+.top { background: linear-gradient(135deg, #0f3d5e 0%, #1b6ea8 55%, #2a9d8f 100%); color: #fff; padding: 18px 0 14px; }
+.top .kicker { font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; opacity: .85; }
+h1 { font-size: 1.7rem; margin: 2px 0 6px; font-weight: 800; letter-spacing: -.01em; }
+h1 .sub { font-weight: 500; font-size: .95rem; opacity: .85; margin-left: 8px; }
+.top .status { color: rgba(255,255,255,.88); }
+.top .status strong { color: #fff; } .top .status .ok { color: #b9f3c7; } .top .status .warn { color: #ffd98a; } .top .status .bad { color: #ffb4b4; }
+.nav a { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.25); color: #fff; }
+.nav a:hover { background: rgba(255,255,255,.22); border-color: #fff; color: #fff; }
+h2 { font-size: 1.1rem; margin: 0; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+h2 .ico { font-size: 1rem; }
+.panel { border-radius: 14px; }
+.intro { margin: 0 0 12px; color: var(--text-2); font-size: .9rem; }
 .muted { color: var(--muted); font-weight: 400; }
 .small { font-size: .85rem; }
 .status { font-size: .82rem; color: var(--text-2); display: flex; gap: 6px 16px; flex-wrap: wrap; }
@@ -54,7 +62,7 @@ details.panel[open] > summary { margin-bottom: 12px; }
 .hero .main.warn { background: var(--warn-bg); border-color: var(--warn); }
 .hero .main.info { background: var(--accent-bg); border-color: var(--accent); }
 .hero .label { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-2); }
-.hero .headline { font-size: 1.35rem; font-weight: 700; line-height: 1.25; }
+.hero .headline { font-size: 1.45rem; font-weight: 800; line-height: 1.2; letter-spacing: -.01em; }
 .hero .sub { color: var(--text-2); font-size: .9rem; }
 .hero .routes { display: grid; gap: 8px; }
 .rv { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface); display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: center; }
@@ -190,3 +198,30 @@ section[id], details[id] { scroll-margin-top: 12px; }
 .tag-auto { font-size: .7rem; padding: 1px 6px; border-radius: 999px; background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent); }
 .tag-manual { font-size: .7rem; padding: 1px 6px; border-radius: 999px; background: var(--good-bg); color: var(--good); border: 1px solid var(--good); }
 @media (max-width: 600px) { .wcard { grid-template-columns: 1fr; } .wcard .wprice, .wcard .wdelta { text-align: left; } }
+
+/* --- sledované: skupiny a výraznější karty --- */
+.wgroup { display: flex; align-items: baseline; gap: 10px; margin: 10px 0 8px; }
+.wgroup h3 { margin: 0; font-size: .95rem; font-weight: 700; }
+.wgroup .muted { font-size: .8rem; }
+.wcard { border-width: 1px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+.wcard::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--accent); }
+.wcard.manual::before { background: #e6a700; }
+.wcard.manual { border-color: #e6a700; background: color-mix(in oklab, #e6a700 7%, var(--surface-2)); }
+.wcard.down::before { background: var(--good); } .wcard.up::before { background: var(--bad); } .wcard.missing::before { background: var(--muted); }
+.wcard { padding-left: 18px; }
+.wcard .wprice { font-size: 1.6rem; letter-spacing: -.02em; }
+.chip { display: inline-block; font-size: .78rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+.chip.down { background: var(--good-bg); color: var(--good); } .chip.up { background: var(--bad-bg); color: var(--bad); } .chip.flat { background: var(--surface); color: var(--text-2); border: 1px solid var(--border); }
+.wcard .sellers { grid-column: 1 / -1; }
+.links a.search { color: var(--text-2); }
+.links a.search::before { content: "🔎 "; }
+.tag-manual { background: color-mix(in oklab, #e6a700 18%, var(--surface)); color: #9a6b00; border-color: #e6a700; }
+:root[data-theme="dark"] .tag-manual, :root:not([data-theme="light"]) .tag-manual { color: #ffd166; }
+/* --- karty nabídek: výraznější cena a hierarchie --- */
+.card { box-shadow: var(--shadow); }
+.card .price { color: var(--accent); }
+.card.rank1 .price { color: var(--good); }
+.card .route { font-size: 1.02rem; }
+.kpi .value { letter-spacing: -.02em; }
+.alert { box-shadow: var(--shadow); }
+.btn-pin.gh { background: color-mix(in oklab, var(--accent) 10%, var(--surface)); font-weight: 600; }

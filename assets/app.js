@@ -294,7 +294,7 @@
     return `Skóre ${czk(o.score)}: cena ${czk(o.price)}${parts.length ? " · " + parts.join(" · ") : " · bez penalizací"}`;
   };
   const linkRow = (o, primary = true) => el("div", { class: "links" }, Object.entries(o.links || {}).map(([k, u], i) =>
-    el("a", { href: u, target: "_blank", rel: "noopener", class: primary && i === 0 ? "primary" : null }, (k === "google" ? "Koupit přes " : "") + (LINK_NAMES[k] || k))));
+    el("a", { href: u, target: "_blank", rel: "noopener", class: k === "google" ? (primary ? "primary" : null) : "search", title: k === "google" ? "Přesně tento dotaz na Google Flights – tam vybereš zpáteční let a prodejce" : `Otevře vyhledávání na ${LINK_NAMES[k] || k} s předvyplněným termínem (jejich ceny automaticky číst nejde)` }, (k === "google" ? "Koupit přes " : "hledat na ") + (LINK_NAMES[k] || k))));
   const sellersRow = (o) => {
     if (!o.sellers || !o.sellers.length) return null;
     const items = [...o.sellers].sort((a, b) => a.price - b.price).slice(0, 8).map((x, i) => el("span", null, i ? " · " : "", i === 0 ? el("strong", null, `${x.name} ${czk(x.price)}`) : `${x.name} ${czk(x.price)}`));
@@ -358,12 +358,15 @@
   };
   function watchCard(w) {
     const cur = w.current; const it = w.itin || {};
-    const c = el("div", { class: "wcard " + (w.auto ? "auto" : "manual") });
+    const state = !cur ? "missing" : (w.prev_price != null && cur.price < w.prev_price) ? "down" : (w.prev_price != null && cur.price > w.prev_price) ? "up" : "";
+    const c = el("div", { class: "wcard " + (w.auto ? "auto" : "manual") + " " + state });
     c.append(el("div", null,
       el("div", { class: "wtitle" }, `${routeName(`${w.origin}→${w.destination}`)} `, el("span", { class: w.auto ? "tag-auto" : "tag-manual" }, w.auto ? "automaticky" : "můj pin")),
       el("div", { class: "wsub" }, `${wd(w.depart_date)} ${dcz(w.depart_date)} → ${dcz(w.return_date)} · ${(it.airlines || (cur && cur.airlines) || []).join(", ") || "libovolná aerolinka"}${it.route ? " · " + it.route : ""}${it.dep_time ? " · odlet " + it.dep_time : ""}${w.note ? " · " + w.note : ""}`)));
     if (cur) {
-      c.append(el("div", null, el("div", { class: "wprice" }, czk(cur.price)), el("div", { class: "wdelta" }, changeCell(cur.price, w.prev_price, "od minula"))));
+      const d = w.prev_price != null ? cur.price - w.prev_price : null;
+      const chip = d == null ? el("span", { class: "chip flat" }, "první měření") : d < 0 ? el("span", { class: "chip down" }, `▼ ${czk(-d)} od minula`) : d > 0 ? el("span", { class: "chip up" }, `▲ ${czk(d)} od minula`) : el("span", { class: "chip flat" }, "beze změny");
+      c.append(el("div", null, el("div", { class: "wprice" }, czk(cur.price)), el("div", { class: "wdelta" }, chip)));
     } else {
       c.append(el("div", null, el("div", { class: "wprice muted" }, "–"), el("div", { class: "wdelta bad" }, w.prev_price ? `dnes není v nabídce (naposledy ${czk(w.prev_price)} ${w.prev_day ? dshort(w.prev_day) : ""})` : "zatím bez nabídky")));
     }
@@ -374,20 +377,27 @@
       cur && !w.same_itinerary && it.route ? el("span", { class: "warn" }, "stejný let dnes nenalezen, ukazuji nejlevnější na termín") : null,
       cur && w.cheapest_any && w.cheapest_any.price < cur.price ? el("span", null, `nejlevnější na termín: ${czk(w.cheapest_any.price)} (${(w.cheapest_any.airlines || []).join(", ")})`) : null);
     c.append(foot);
+    if (cur && cur.sellers && cur.sellers.length) c.append(sellersRow(cur));
+    else if (cur && cur.sellers_error) c.append(el("div", { class: "sellers muted" }, "Ceny prodejců se dnes nepodařilo načíst, zkusíme příště."));
+    if (cur && cur.price_insight && cur.price_insight.level) c.append(el("div", { class: "badges" }, el("span", { class: "badge " + (cur.price_insight.level === "nízká" ? "good" : cur.price_insight.level === "vysoká" ? "bad" : "") }, `Google: ${cur.price_insight.level} cena${cur.price_insight.low ? ` (obvykle ${kcs(cur.price_insight.low)}–${kcs(cur.price_insight.high)} tis.)` : ""}`)));
     const o = { origin: w.origin, destination: w.destination, depart_date: w.depart_date, return_date: w.return_date, price: cur ? cur.price : (w.prev_price || 0), airlines: it.airlines || [], route: it.route, legs: [] };
     const links = el("div", { class: "links" });
     const gl = (cur && cur.links && cur.links.google) || buildLinks(o).google;
-    if (gl) links.append(el("a", { class: "primary", href: gl, target: "_blank", rel: "noopener" }, "Koupit přes Google Flights"));
-    const bl = buildLinks(o); ["kiwi", "skyscanner", "kayak"].forEach((k) => links.append(el("a", { href: bl[k], target: "_blank", rel: "noopener" }, LINK_NAMES[k])));
+    if (gl) links.append(el("a", { class: "primary", href: gl, target: "_blank", rel: "noopener", title: "Přesně tento dotaz na Google Flights – vybereš zpáteční let a prodejce" }, "Koupit přes Google Flights"));
+    const bl = buildLinks(o); ["kiwi", "skyscanner", "kayak"].forEach((k) => links.append(el("a", { class: "search", href: bl[k], target: "_blank", rel: "noopener", title: "Otevře vyhledávání s předvyplněným termínem; jejich ceny automaticky číst nejde" }, "hledat na " + LINK_NAMES[k])));
     links.append(w.auto ? el("a", { class: "btn-pin gh", href: watchIssue(o), target: "_blank", rel: "noopener" }, "★ Nechat trvale") : el("a", { class: "btn-pin", href: watchIssue(o, true), target: "_blank", rel: "noopener" }, "zrušit sledování"));
     c.append(links);
     return c;
   }
   function renderWatch() {
-    const box = $("#watchList"); box.innerHTML = "";
-    $("#watchMeta").textContent = WATCH.length ? `${WATCH.filter((w) => !w.auto).length} vlastních · ${WATCH.filter((w) => w.auto).length} automaticky · priorita ve skenu` : "";
-    if (!WATCH.length) { box.append(el("div", { class: "empty" }, "Zatím nic. Po příštím skenu se sem automaticky přidají nejlepší dealy; vlastní let přidáš tlačítkem „★ Sledovat“ u nabídky níže.")); return; }
-    WATCH.forEach((w) => box.append(watchCard(w)));
+    const A = $("#watchAuto"), M = $("#watchManual"); A.innerHTML = ""; M.innerHTML = "";
+    const auto = WATCH.filter((w) => w.auto), man = WATCH.filter((w) => !w.auto);
+    $("#watchMeta").textContent = WATCH.length ? `${auto.length} vybral skener · ${man.length} tvoje · priorita ve skenu` : "";
+    if (!WATCH.length) { A.append(el("div", { class: "empty" }, "Zatím nic. Po příštím skenu se sem automaticky přidají nejlepší dealy; vlastní let přidáš tlačítkem „★ Sledovat“ u nabídky níže.")); return; }
+    A.append(el("div", { class: "wgroup" }, el("h3", null, "Výběr skeneru"), el("span", { class: "muted" }, "nejlepší poměr cena/výkon z posledního skenu, obměňuje se automaticky")));
+    A.append(el("div", { class: "cards" }, auto.length ? auto.map(watchCard) : el("div", { class: "empty" }, "Po příštím skenu.")));
+    M.append(el("div", { class: "wgroup" }, el("h3", null, "Tvoje piny"), el("span", { class: "muted" }, "ručně vybrané, hlídáme stejný let (aerolinky + trasa)")));
+    M.append(el("div", { class: "cards" }, man.length ? man.map(watchCard) : el("div", { class: "empty" }, "Zatím žádný. Klikni na „★ Sledovat (GitHub)“ u nabídky a potvrď issue.")));
   }
   function renderLocalPins() {
     const box = $("#localPins"); box.innerHTML = "";

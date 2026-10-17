@@ -8,7 +8,7 @@ a dashboard, který ukazuje nejlepší příležitosti podle **poměru cena/výk
 1. **Každý den ráno** (GitHub Actions, cron `17 4 * * *` UTC) projde všechny kombinace
    `odletové letiště × cílové letiště × den odletu × délka pobytu` z `config.yaml`
    (výchozí: PRG + VIE → BKK + HKT, **každý den odletu** 1. 8.–30. 9. 2027 × 13/14/15 dní = 732 kombinací).
-   V Actions běží Praha a Vídeň paralelně a třetí job výsledky sloučí, vyhodnotí a publikuje.
+   V Actions běží 4 trasy paralelně (≈ 20 min) a pátý job výsledky sloučí, vyhodnotí a publikuje.
 2. **Každý dotaz je „anonymní okno“** – samostatný HTTP požadavek z čerstvého runneru bez cookies
    a historie. Hlavní zdroj je **Google Flights** (protobuf dotaz `tfs`, knihovna `fast-flights`);
    když primp fetch selže, zkusí se headless Chromium v incognito kontextu (Playwright).

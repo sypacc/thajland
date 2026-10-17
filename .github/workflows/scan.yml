@@ -36,13 +36,13 @@ env:
 
 jobs:
   scan:
-    name: Sken ${{ matrix.origin }}
+    name: Sken ${{ matrix.route }}
     runs-on: ubuntu-latest
     timeout-minutes: 110
     strategy:
       fail-fast: false
       matrix:
-        origin: [PRG, VIE]
+        route: [PRG-BKK, PRG-HKT, VIE-BKK, VIE-HKT]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -61,9 +61,10 @@ jobs:
           PYTHONUNBUFFERED: "1"
           THAJLAND_DEBUG_DIR: debug
         run: |
-          ARGS="--origin ${{ matrix.origin }} --partial-out partial/${{ matrix.origin }}.json"
+          ARGS="--route ${{ matrix.route }} --partial-out partial/${{ matrix.route }}.json"
           if [ -n "${{ github.event.inputs.limit }}" ]; then ARGS="$ARGS --limit ${{ github.event.inputs.limit }}"; fi
-          if [ -n "${{ github.event.inputs.route }}" ]; then ARGS="$ARGS --route ${{ github.event.inputs.route }}"; fi
+          # diagnostika jedné trasy: ostatní joby jen rychle skončí bez dotazů
+          if [ -n "${{ github.event.inputs.route }}" ] && [ "${{ github.event.inputs.route }}" != "${{ matrix.route }}" ]; then ARGS="$ARGS --limit 0"; fi
           if [ -n "${{ github.event.inputs.max_stops }}" ]; then ARGS="$ARGS --max-stops ${{ github.event.inputs.max_stops }}"; fi
           python -m scanner.run $ARGS
       - name: Ladicí report (do logu)
@@ -88,14 +89,14 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: partial-${{ matrix.origin }}
+          name: partial-${{ matrix.route }}
           path: partial/
           retention-days: 3
       - name: Ladicí výstupy
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: debug-${{ matrix.origin }}-${{ github.run_number }}
+          name: debug-${{ matrix.route }}-${{ github.run_number }}
           path: debug/
           if-no-files-found: ignore
           retention-days: 7

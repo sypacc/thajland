@@ -81,7 +81,7 @@ def scan(cfg: Config, *, limit: int | None = None, only_source: str | None = Non
             return 1
         return 2
     plan.sort(key=_prio)
-    if limit:
+    if limit is not None and limit >= 0 and (limit or limit == 0):
         plan = plan[:limit]
     plan = plan[:max_queries]
 
@@ -242,11 +242,25 @@ def finalize(cfg: Config, parts: list[dict[str, Any]], *, enrich: bool = True) -
             q["yesterday_min"] = yesterday.get(qk)
             q["is_new"] = bool(len(history) >= 3 and qk not in seen_keys and not q.get("stale"))
 
-    # prodejci pro nejlepší dealy
+    # prodejci: nejdřív sledované lety (ruční, pak automatické), potom nejlepší dealy
     sc = cfg.scan
     enrich_n = int(sc.get("enrich_sellers_top", 0)) if (enrich and sc.get("enrich_sellers")) else 0
     if enrich_n and not google_disabled and offers:
-        _enrich_sellers(offers, enrich_n, 900)
+        by_id = {o.get("id"): o for o in offers}
+        first = []
+        for w in sorted(watch_items, key=lambda x: (x["auto"], 0)):
+            cur = w.get("current")
+            if cur and cur.get("id") in by_id and not by_id[cur["id"]].get("stale"):
+                first.append(by_id[cur["id"]])
+        _enrich_sellers(offers, enrich_n + len(first), 1200, first=first)
+        for w in watch_items:
+            cur = w.get("current")
+            if cur and cur.get("id") in by_id:
+                src = by_id[cur["id"]]
+                if src.get("sellers") is not None:
+                    cur["sellers"] = src.get("sellers"); cur["sellers_error"] = src.get("sellers_error")
+                if src.get("price_insight"):
+                    cur["price_insight"] = src["price_insight"]
 
     # zeštíhlení výstupu: konstantní poznámka a odvoditelné odkazy (Kiwi, Skyscanner, …) se v dashboardu dopočítají
     for o in offers:
@@ -292,12 +306,13 @@ def finalize(cfg: Config, parts: list[dict[str, Any]], *, enrich: bool = True) -
     }
 
 
-def _enrich_sellers(offers: list[dict[str, Any]], n: int, budget_s: float) -> None:
+def _enrich_sellers(offers: list[dict[str, Any]], n: int, budget_s: float,
+                    first: list[dict[str, Any]] | None = None) -> None:
     fresh = [o for o in offers if o["source"] == "google" and not o.get("stale") and o.get("score") is not None]
     fresh.sort(key=lambda o: o["score"])
     seen: set[tuple] = set()
     picked = []
-    for o in fresh:
+    for o in list(first or []) + fresh:
         key = (o["depart_date"], o["price"], tuple(o.get("airlines") or []), o["route"])
         if key in seen:
             continue
