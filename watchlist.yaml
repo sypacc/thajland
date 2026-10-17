@@ -6,8 +6,19 @@
 # Každá položka: odlet/cíl (IATA), datum odletu a návratu; volitelně itinerář (aerolinky, trasa, čas odletu),
 # aby se hlídala cena stejného letu, ne jen nejlevnější na termín; poznámka.
 auto:
-  enabled: true     # automaticky sledovat nejlepší dealy z každého skenu
-  top: 5            # kolik nejlepších (podle skóre) držet ve sledování
-  keep_days: 10     # jak dlouho nechat automaticky přidaný let ve sledování, když vypadne z top N
-
-watch: []
+  enabled: true
+  top: 5
+  keep_days: 10
+watch:
+- origin: VIE
+  destination: HKT
+  depart_date: '2027-08-19'
+  return_date: '2027-09-01'
+  itin:
+    airlines:
+    - Scoot
+    route: VIE→SIN→HKT
+    dep_time: '12:10'
+  note: test z Claude
+  price_at_add: 14252
+  added: '2026-10-17'
