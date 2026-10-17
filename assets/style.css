@@ -225,3 +225,11 @@ section[id], details[id] { scroll-margin-top: 12px; }
 .kpi .value { letter-spacing: -.02em; }
 .alert { box-shadow: var(--shadow); }
 .btn-pin.gh { background: color-mix(in oklab, var(--accent) 10%, var(--surface)); font-weight: 600; }
+
+.explore { margin-top: 14px; border-top: 1px dashed var(--border); padding-top: 10px; }
+.explore > summary { cursor: pointer; list-style: none; color: var(--text-2); }
+.explore > summary::-webkit-details-marker { display: none; }
+.explore > summary::before { content: "▸ "; } .explore[open] > summary::before { content: "▾ "; }
+.wcard .wname { font-size: 1.05rem; font-weight: 800; letter-spacing: -.01em; }
+.wcard .wname .nick { font-weight: 600; color: var(--accent); }
+.wcard.manual .wname .nick { color: #b8860b; }

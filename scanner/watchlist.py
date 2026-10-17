@@ -102,6 +102,36 @@ def apply_issue(data: dict[str, Any], cmd: str, entry: dict[str, Any], today: st
     return "přidáno"
 
 
+# ----------------------------------------------------------------------------- pojmenování
+HUB_CZ = {"DOH": "Dauhá", "DXB": "Dubaj", "AUH": "Abú Dhabí", "IST": "Istanbul", "SAW": "Istanbul", "MCT": "Maskat",
+          "SIN": "Singapur", "WAW": "Varšavu", "ZRH": "Curych", "HEL": "Helsinky", "FRA": "Frankfurt", "MUC": "Mnichov",
+          "VIE": "Vídeň", "CDG": "Paříž", "AMS": "Amsterdam", "LHR": "Londýn", "BKK": "Bangkok", "KUL": "Kuala Lumpur",
+          "HKG": "Hongkong", "TPE": "Tchaj-pej", "PEK": "Peking", "PVG": "Šanghaj", "CAN": "Kanton", "BAH": "Bahrajn",
+          "KWI": "Kuvajt", "RUH": "Rijád", "JED": "Džiddu", "CAI": "Káhiru", "ADD": "Addis Abebu", "BOM": "Bombaj",
+          "DEL": "Dillí", "CMB": "Kolombo", "ALA": "Almaty", "TAS": "Taškent", "BEG": "Bělehrad", "OTP": "Bukurešť",
+          "CPH": "Kodaň", "ARN": "Stockholm", "BRU": "Brusel", "MXP": "Milán", "FCO": "Řím", "SHJ": "Šardžá"}
+AIRLINE_SHORT = {"Qatar Airways": "Qatar", "Turkish Airlines": "Turkish", "Emirates": "Emirates", "Etihad": "Etihad",
+                 "Oman Air": "Oman Air", "SalamAir": "SalamAir", "Singapore Airlines": "Singapore", "EVA Air": "EVA",
+                 "Austrian": "Austrian", "Lufthansa": "Lufthansa", "SWISS": "Swiss", "Swiss": "Swiss", "LOT": "LOT",
+                 "Finnair": "Finnair", "KLM": "KLM", "Air France": "Air France", "Scoot": "Scoot", "THAI": "Thai",
+                 "Thai Airways": "Thai", "Air China": "Air China", "China Eastern": "China Eastern", "flydubai": "flydubai",
+                 "Air Arabia": "Air Arabia", "Gulf Air": "Gulf Air", "Saudia": "Saudia", "Cathay Pacific": "Cathay"}
+
+
+def nickname(airlines: list[str] | None, route: str | None) -> str:
+    """Krátké lidské jméno letu: 'Qatar přes Dauhá', 'Austrian přímo', 'Oman Air přes Maskat'."""
+    al = [a for a in (airlines or []) if a]
+    main = AIRLINE_SHORT.get(al[0], al[0]) if al else "?"
+    if len(al) > 1 and al[1] not in (al[0],):
+        main = f"{main} + {AIRLINE_SHORT.get(al[1], al[1])}"
+    hops = (route or "").split("→")
+    mids = hops[1:-1]
+    if not mids:
+        return f"{main} přímo"
+    via = ", ".join(HUB_CZ.get(m, m) for m in mids)
+    return f"{main} přes {via}"
+
+
 # ----------------------------------------------------------------------------- vyhodnocení
 def _compact(o: dict[str, Any]) -> dict[str, Any]:
     return {"id": o.get("id"), "price": o["price"], "score": o.get("score"), "airlines": o.get("airlines", []),
@@ -237,6 +267,17 @@ def evaluate(watchlist: dict[str, Any], payload: dict[str, Any], watch_data: dic
             "min_seen": min(mins) if mins else None, "max_seen": max(mins) if mins else None,
             "history": hist,
         })
-    sev = {True: 0, False: 1}
-    out.sort(key=lambda w: (sev[not w["auto"]], (w["current"] or {}).get("score") or (w["current"] or {}).get("price") or 10**9))
-    return out
+    # pořadí: tipy skeneru podle skóre a ceny (Tip 1 = nejlepší poměr), pak ruční piny; jména
+    def _rank(w):
+        c = w["current"] or {}
+        return (c.get("score") if c.get("score") is not None else 10**9, c.get("price") or 10**9)
+    autos = sorted([w for w in out if w["auto"]], key=_rank)
+    mans = sorted([w for w in out if not w["auto"]], key=_rank)
+    for i, w in enumerate(autos, 1):
+        w["name"] = f"Tip {i}"
+    for i, w in enumerate(mans, 1):
+        w["name"] = f"Můj pin {i}"
+    for w in autos + mans:
+        src = w.get("current") or w.get("itin") or {}
+        w["nick"] = nickname(src.get("airlines"), src.get("route"))
+    return autos + mans

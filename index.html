@@ -20,7 +20,7 @@
       <div id="status" class="status">Načítám data…</div>
     </div>
     <nav class="nav" aria-label="Sekce">
-      <a href="#watch">Sledované</a><a href="#alertsPanel">Hlášení</a><a href="#deals">Nabídky</a><a href="#calendarPanel">Kalendář</a><a href="#trend">Vývoj</a><a href="#allPanel">Vše</a><a href="#howto">Jak číst</a>
+      <a href="#watch">Lety ke sledování</a><a href="#alertsPanel">Hlášení</a><a href="#deals">Prozkoumat</a><a href="#calendarPanel">Kalendář</a><a href="#trend">Vývoj</a><a href="#allPanel">Vše</a><a href="#howto">Jak číst</a>
     </nav>
   </div>
 </header>
@@ -29,13 +29,19 @@
   <!-- 1. Verdikt -->
   <section id="verdict" class="hero" aria-label="Verdikt"></section>
 
-  <!-- 1b. Sledované lety -->
+  <!-- 1b. Lety ke sledování -->
   <section id="watch" class="panel watch">
-    <div class="panel-head"><h2><span class="ico">★</span> Sledované lety</h2><span id="watchMeta" class="muted small"></span></div>
-    <p class="intro">Tyhle lety se kontrolují jako první, mají vlastní křivku ceny a přijde hlášení, když zlevní, zdraží nebo zmizí. Nahoře je <strong>výběr skeneru</strong> (nejlepší poměr cena/výkon), pod ním <strong>tvoje piny</strong>.</p>
+    <div class="panel-head"><h2><span class="ico">★</span> Lety ke sledování</h2><span id="watchMeta" class="muted small"></span></div>
+    <p class="intro">Jeden přehled: <strong>Tip 1–5</strong> jsou moje aktuálně nejlepší lety podle poměru cena/výkon (seřazené od nejlepšího, pak podle ceny), pod nimi <strong>tvoje piny</strong>. Všechny se kontrolují jako první a při změně ceny přijde hlášení. Každý let má jednoduché jméno, stejné i v hlášeních.</p>
     <div id="watchAuto"></div>
     <div id="watchManual"></div>
     <div id="localPins" class="localpins"></div>
+    <details id="deals" class="explore">
+      <summary><strong>Prozkoumat další nabídky</strong> <span class="muted small">· nejlevnější, nejrychlejší, max 1 přestup · odtud přidáš vlastní pin</span></summary>
+      <div class="panel-head" style="margin-top:10px"><div id="dealTabs" class="tabs" role="tablist"></div></div>
+      <p class="muted small" id="dealsHint"></p>
+      <div id="top" class="cards"></div>
+    </details>
   </section>
 
   <!-- 2. Postřehy -->
@@ -45,16 +51,6 @@
   <section id="alertsPanel" class="panel" aria-label="Hlášení">
     <div class="panel-head"><h2><span class="ico">🔔</span> Hlášení</h2><span id="alertsMeta" class="muted small"></span></div>
     <div id="alerts" class="alerts"></div>
-  </section>
-
-  <!-- 4. Nejlepší nabídky -->
-  <section class="panel" id="deals">
-    <div class="panel-head">
-      <h2><span class="ico">✈️</span> Nejlepší nabídky teď</h2>
-      <div id="dealTabs" class="tabs" role="tablist"></div>
-    </div>
-    <p class="muted small" id="dealsHint"></p>
-    <div id="top" class="cards"></div>
   </section>
 
   <!-- 5. Kalendář cen -->
@@ -105,7 +101,7 @@
   <details class="panel notes" id="howto">
     <summary><h2>Jak to číst</h2><span class="muted small">zdroje, skóre, hlášení, omezení</span></summary>
     <ul>
-      <li><strong>Sledované lety</strong>: tlačítko „Sledovat“ u nabídky otevře předvyplněné GitHub issue (jen potvrdíš „Submit“); robot ho během minuty zapíše do <code>watchlist.yaml</code>, issue zavře a od dalšího skenu má let prioritu, vlastní křivku ceny a hlášení při zlevnění/zdražení/zmizení. „Jen v tomto prohlížeči“ je rychlý pin bez GitHubu (neovlivní sken). Pár nejlepších dealů se sleduje automaticky.</li>
+      <li><strong>Lety ke sledování</strong>: „Tip 1–5“ vybírá skener automaticky (nejlepší poměr cena/výkon, obměňují se), „tvoje piny“ přidáš tlačítkem „Sledovat“ u nabídky otevře předvyplněné GitHub issue (jen potvrdíš „Submit“); robot ho během minuty zapíše do <code>watchlist.yaml</code>, issue zavře a od dalšího skenu má let prioritu, vlastní křivku ceny a hlášení při zlevnění/zdražení/zmizení. „Jen v tomto prohlížeči“ je rychlý pin bez GitHubu (neovlivní sken). Pár nejlepších dealů se sleduje automaticky.</li>
       <li><strong>Verdikt</strong> porovnává dnešní nejnižší cenu na trase s mediánem všech dosavadních měření. Prvních pár dní jen sbíráme data, pak se objeví doporučení „kupovat / férová cena / počkat“.</li>
       <li><strong>Skóre = efektivní cena v Kč</strong>: cena + penalizace za čas nad 14 h, za 2. a další přestup, za dlouhé (&gt;5 h) nebo rizikově krátké (&lt;1 h) přestupy ± korekce za aerolinku; přímý let má bonus. Čím nižší, tím lepší. Váhy jsou v <code>config.yaml</code>.</li>
       <li><strong>Hlášení</strong>: cena pod cílovou hranicí, prudký pokles od minula, výrazně pod mediánem historie termínu, nové minimum trasy. Posílají se jako GitHub issue, volitelně Telegram / ntfy / e-mail.</li>

@@ -160,18 +160,20 @@ def detect(payload: dict[str, Any], history: list[dict[str, Any]], cfg: dict[str
                          "price": prev, "currency": "CZK", "airlines": (w.get("itin") or {}).get("airlines", []),
                          "stops": None, "route": (w.get("itin") or {}).get("route"), "duration_min": None,
                          "links": {}, "score": None}
-                add("watch_gone", ghost, f"sledovaný let (naposledy {prev} Kč, {w['prev_day']}) dnes v nabídce není", "medium")
+                add("watch_gone", ghost, f"{w.get('name', 'sledovaný let')} ({w.get('nick', '')}) dnes v nabídce není (naposledy {prev} Kč, {w['prev_day']})", "medium")
             continue
         base = dict(cur, source="google", origin=w["origin"], destination=w["destination"], depart_date=w["depart_date"],
                     return_date=w["return_date"], currency="CZK",
-                    nights=(dt.date.fromisoformat(w["return_date"]) - dt.date.fromisoformat(w["depart_date"])).days)
+                    nights=(dt.date.fromisoformat(w["return_date"]) - dt.date.fromisoformat(w["depart_date"])).days,
+                    watch_name=f"{w.get('name', 'sledovaný let')} ({w.get('nick', '')})".replace(" ()", ""))
+        label = base["watch_name"]
         p = cur["price"]
         if prev is not None and (prev - p >= w_drop_czk or (prev - p) / prev * 100 >= w_drop_pct):
-            add("watch_drop", base, f"sledovaný let zlevnil z {prev} na {p} Kč ({(prev - p) / prev * 100:.0f} %)", "high", previous_price=prev)
+            add("watch_drop", base, f"{label} zlevnil z {prev} na {p} Kč ({(prev - p) / prev * 100:.0f} %)", "high", previous_price=prev)
         elif w.get("min_seen") is not None and p <= w["min_seen"] and len(w.get("history") or []) >= 3 and prev is not None and p < prev:
-            add("watch_low", base, f"sledovaný let je na svém minimu ({p} Kč za {len(w['history'])} měření)", "high")
+            add("watch_low", base, f"{label} je na svém minimu ({p} Kč za {len(w['history'])} měření)", "high")
         if prev is not None and (p - prev) / prev * 100 >= w_up_pct:
-            add("watch_up", base, f"sledovaný let zdražil z {prev} na {p} Kč (+{(p - prev) / prev * 100:.0f} %)", "info", previous_price=prev)
+            add("watch_up", base, f"{label} zdražil z {prev} na {p} Kč (+{(p - prev) / prev * 100:.0f} %)", "info", previous_price=prev)
 
     sev_rank = {"high": 0, "medium": 1, "info": 2}
     out: list[dict[str, Any]] = []
@@ -197,7 +199,7 @@ def detect(payload: dict[str, Any], history: list[dict[str, Any]], cfg: dict[str
             "depart_date": o["depart_date"], "return_date": o["return_date"], "nights": o.get("nights"),
             "route": o.get("route"), "airlines": o.get("airlines", []), "stops": o.get("stops"),
             "duration_min": o.get("duration_min"), "source": o["source"],
-            "links": o.get("links", {}), "offer_id": o.get("id"), **extra,
+            "links": o.get("links", {}), "offer_id": o.get("id"), "watch_name": o.get("watch_name"), **extra,
         })
     # Priorita: více důvodů a vyšší závažnost první, pak lepší skóre; omezit počet za běh.
     out.sort(key=lambda a: (sev_rank.get(a["severity"], 9), -len(a["kinds"]), a.get("score") or a["price"]))

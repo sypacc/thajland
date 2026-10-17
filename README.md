@@ -28,9 +28,11 @@ a dashboard, který ukazuje nejlepší příležitosti podle **poměru cena/výk
    vs. minule / 7 / 30 dní, minima, sparklines, graf) → sbalená tabulka všech nabídek s filtry a předvolbami →
    stav skenu a pokrytí termínů → metodika.
 
-## Sledované lety (piny)
+## Lety ke sledování (tipy + piny)
 
-Hlavní pracovní režim: pár vybraných levných letů se hlídá přednostně.
+Hlavní pracovní režim: jedna sekce, v ní **Tip 1–5** (automatický výběr skeneru podle poměru cena/výkon, pak ceny)
+a pod nimi **tvoje piny**. Každý let má jednoduché jméno („Tip 2 · Qatar přes Dauhá“, „Můj pin 1 · Scoot přes Singapur“),
+které se používá i v hlášeních. Ostatní nabídky jsou ve sbalené části „Prozkoumat další nabídky“.
 
 - **Přidání z dashboardu:** tlačítko **★ Sledovat (GitHub)** u nabídky otevře předvyplněné issue
   (`watch: PRG→BKK 2027-08-26 → 2027-09-09` + itinerář v těle). Stačí potvrdit „Submit new issue“;

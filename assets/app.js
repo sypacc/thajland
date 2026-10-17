@@ -360,9 +360,11 @@
     const cur = w.current; const it = w.itin || {};
     const state = !cur ? "missing" : (w.prev_price != null && cur.price < w.prev_price) ? "down" : (w.prev_price != null && cur.price > w.prev_price) ? "up" : "";
     const c = el("div", { class: "wcard " + (w.auto ? "auto" : "manual") + " " + state });
+    const nick = w.nick || ((cur && cur.airlines) || it.airlines || []).join(", ");
     c.append(el("div", null,
-      el("div", { class: "wtitle" }, `${routeName(`${w.origin}→${w.destination}`)} `, el("span", { class: w.auto ? "tag-auto" : "tag-manual" }, w.auto ? "automaticky" : "můj pin")),
-      el("div", { class: "wsub" }, `${wd(w.depart_date)} ${dcz(w.depart_date)} → ${dcz(w.return_date)} · ${(it.airlines || (cur && cur.airlines) || []).join(", ") || "libovolná aerolinka"}${it.route ? " · " + it.route : ""}${it.dep_time ? " · odlet " + it.dep_time : ""}${w.note ? " · " + w.note : ""}`)));
+      el("div", { class: "wname" }, w.name || (w.auto ? "Tip" : "Můj pin"), " · ", el("span", { class: "nick" }, nick)),
+      el("div", { class: "wtitle" }, `${routeName(`${w.origin}→${w.destination}`)}`, el("span", { class: "muted" }, ` · ${wd(w.depart_date)} ${dcz(w.depart_date)} → ${dcz(w.return_date)}`)),
+      el("div", { class: "wsub" }, `${(it.route || (cur && cur.route) || "")}${it.dep_time ? " · odlet " + it.dep_time : (cur && cur.dep_time ? " · odlet " + cur.dep_time : "")}${cur && cur.duration_min ? " · tam " + durShort(cur.duration_min) : ""}${cur && cur.stops != null ? " · " + (cur.stops === 0 ? "přímý" : cur.stops + "× přestup") : ""}${w.note ? " · „" + w.note + "“" : ""}`)));
     if (cur) {
       const d = w.prev_price != null ? cur.price - w.prev_price : null;
       const chip = d == null ? el("span", { class: "chip flat" }, "první měření") : d < 0 ? el("span", { class: "chip down" }, `▼ ${czk(-d)} od minula`) : d > 0 ? el("span", { class: "chip up" }, `▲ ${czk(d)} od minula`) : el("span", { class: "chip flat" }, "beze změny");
@@ -392,10 +394,10 @@
   function renderWatch() {
     const A = $("#watchAuto"), M = $("#watchManual"); A.innerHTML = ""; M.innerHTML = "";
     const auto = WATCH.filter((w) => w.auto), man = WATCH.filter((w) => !w.auto);
-    $("#watchMeta").textContent = WATCH.length ? `${auto.length} vybral skener · ${man.length} tvoje · priorita ve skenu` : "";
+    $("#watchMeta").textContent = WATCH.length ? `${Math.min(5, auto.length)} tipů · ${man.length} tvoje · priorita ve skenu` : "";
     if (!WATCH.length) { A.append(el("div", { class: "empty" }, "Zatím nic. Po příštím skenu se sem automaticky přidají nejlepší dealy; vlastní let přidáš tlačítkem „★ Sledovat“ u nabídky níže.")); return; }
-    A.append(el("div", { class: "wgroup" }, el("h3", null, "Výběr skeneru"), el("span", { class: "muted" }, "nejlepší poměr cena/výkon z posledního skenu, obměňuje se automaticky")));
-    A.append(el("div", { class: "cards" }, auto.length ? auto.map(watchCard) : el("div", { class: "empty" }, "Po příštím skenu.")));
+    A.append(el("div", { class: "wgroup" }, el("h3", null, "Moje tipy"), el("span", { class: "muted" }, "Tip 1 = nejlepší poměr cena/výkon, dál podle ceny · obměňují se automaticky")));
+    A.append(el("div", { class: "cards" }, auto.length ? auto.slice(0, 5).map(watchCard) : el("div", { class: "empty" }, "Po příštím skenu.")));
     M.append(el("div", { class: "wgroup" }, el("h3", null, "Tvoje piny"), el("span", { class: "muted" }, "ručně vybrané, hlídáme stejný let (aerolinky + trasa)")));
     M.append(el("div", { class: "cards" }, man.length ? man.map(watchCard) : el("div", { class: "empty" }, "Zatím žádný. Klikni na „★ Sledovat (GitHub)“ u nabídky a potvrď issue.")));
   }
@@ -563,7 +565,7 @@
       el("div", { class: "price" }, czk(a.price), el("span", { class: "muted small" }, " /os")),
       el("div", { class: "when" }, (a.day === today ? "dnes" : dcz(a.day)) + " · " + (a.kind_label || a.kind)),
       el("div", { class: "body" },
-        el("div", { class: "title" }, `${city(a.origin)} → ${city(a.destination)} · ${dcz(a.depart_date)} – ${dcz(a.return_date)} (${a.nights} dní) · ${(a.airlines || []).join(", ") || "–"} · ${a.stops === 0 ? "přímý" : a.stops === 1 ? "1 přestup" : a.stops + " přestupy"}`),
+        el("div", { class: "title" }, `${a.watch_name ? a.watch_name + " · " : ""}${city(a.origin)} → ${city(a.destination)} · ${dcz(a.depart_date)} – ${dcz(a.return_date)} (${a.nights} dní) · ${(a.airlines || []).join(", ") || "–"} · ${a.stops === 0 ? "přímý" : a.stops === 1 ? "1 přestup" : a.stops == null ? "" : a.stops + " přestupy"}`),
         el("div", { class: "reason" }, a.reason),
         el("div", { class: "links" }, Object.entries(a.links || {}).slice(0, 5).map(([k, u], i) => el("a", { href: u, target: "_blank", rel: "noopener", class: i === 0 ? "primary" : null }, LINK_NAMES[k] || k)))))));
     if (ALERTS.length > 10) box.append(el("div", { class: "muted small" }, `… a dalších ${ALERTS.length - 10} starších v data/alerts.json`));
