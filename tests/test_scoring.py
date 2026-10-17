@@ -160,3 +160,30 @@ def test_booking_horizon_and_stale_carry_for_transient_empty(tmp_path, monkeypat
     assert qs["2027-08-01"]["stale"] is True and qs["2027-08-01"]["stale_reason"] == "empty"
     assert qs["2027-09-20"]["status"] == "empty" and not qs["2027-09-20"].get("stale")
     assert payload["stats"]["queries_stale"] == 1 and payload["offers"][0]["stale"] is True
+
+
+def test_finalize_with_seller_enrichment_enabled(tmp_path, monkeypatch):
+    """Regrese: pořadí bloků ve finalize (sledované lety musí být vyhodnoceny před prodejci)."""
+    from scanner import run as runmod
+    from scanner import watchlist as wm
+    from scanner.sources import google_flights
+    from scanner.config import Config
+    monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(storage, "HISTORY_DIR", tmp_path / "history")
+    monkeypatch.setattr(wm, "WATCHLIST_PATH", tmp_path / "wl.yaml")
+    monkeypatch.setattr(wm, "WATCH_DATA_PATH", tmp_path / "watch.json")
+    monkeypatch.setattr(google_flights, "fetch_sellers", lambda url, price, hint=None: ([{"name": "Qatar Airways", "price": price}], None, {"level": "typická", "low": 14000, "high": 25000}))
+    monkeypatch.setattr(runmod.time, "sleep", lambda s: None)
+    cfg = Config(raw={"trip": {"origins": ["PRG"], "destinations": ["BKK"], "depart_from": "2027-08-01", "depart_to": "2027-08-01",
+                               "depart_step_days": 1, "trip_lengths": [14]},
+                      "scan": {"enrich_sellers": True, "enrich_sellers_top": 2}, "scoring": {}})
+    o = {"id": "a", "source": "google", "origin": "PRG", "destination": "BKK", "depart_date": "2027-08-01", "return_date": "2027-08-15",
+         "nights": 14, "price": 15295, "currency": "CZK", "airlines": ["Qatar Airways"], "stops": 1, "route": "PRG→DOH→BKK",
+         "legs": [{"from_airport": "PRG", "to_airport": "DOH", "departure": "2027-08-01T15:50", "arrival": "2027-08-01T22:00", "duration_min": 370}],
+         "layovers": [], "duration_min": 965, "score": 14600, "links": {"google": "https://g"}}
+    q = {"origin": "PRG", "destination": "BKK", "depart_date": "2027-08-01", "return_date": "2027-08-15", "source": "google",
+         "status": "ok", "count": 1, "min_price": 15295, "best_score": 14600, "top": None}
+    payload = runmod.finalize(cfg, [{"offers": [o], "queries": [q], "scan": {}}], enrich=True)
+    w = payload["watch"][0]
+    assert w["auto"] is True and w["current"]["sellers"][0]["name"] == "Qatar Airways" and w["current"]["price_insight"]["level"] == "typická"
+    assert payload["offers"][0]["watched"] is True and payload["offers"][0]["sellers"]

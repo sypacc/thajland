@@ -242,6 +242,14 @@ def finalize(cfg: Config, parts: list[dict[str, Any]], *, enrich: bool = True) -
             q["yesterday_min"] = yesterday.get(qk)
             q["is_new"] = bool(len(history) >= 3 and qk not in seen_keys and not q.get("stale"))
 
+    # sledované lety (ruční piny + automatické top dealy)
+    wl = watch_mod.load_watchlist()
+    wd = watch_mod.load_watch_data()
+    watch_items = watch_mod.evaluate(wl, {"day": today, "offers": offers}, wd)
+    watched_keys = {w["key"] for w in watch_items}
+    for o in offers:
+        o["watched"] = watch_mod.watch_key(o["origin"], o["destination"], o["depart_date"], o["return_date"]) in watched_keys
+
     # prodejci: nejdřív sledované lety (ruční, pak automatické), potom nejlepší dealy
     sc = cfg.scan
     enrich_n = int(sc.get("enrich_sellers_top", 0)) if (enrich and sc.get("enrich_sellers")) else 0
@@ -267,14 +275,6 @@ def finalize(cfg: Config, parts: list[dict[str, Any]], *, enrich: bool = True) -
         o.pop("note", None)
         if isinstance(o.get("links"), dict) and "google" in o["links"]:
             o["links"] = {"google": o["links"]["google"]}
-
-    # sledované lety (ruční piny + automatické top dealy)
-    wl = watch_mod.load_watchlist()
-    wd = watch_mod.load_watch_data()
-    watch_items = watch_mod.evaluate(wl, {"day": today, "offers": offers}, wd)
-    watched_keys = {w["key"] for w in watch_items}
-    for o in offers:
-        o["watched"] = watch_mod.watch_key(o["origin"], o["destination"], o["depart_date"], o["return_date"]) in watched_keys
 
     ok = [q for q in queries if q["status"] == "ok" and not q.get("stale")]
     prices = [q["min_price"] for q in queries if q.get("min_price")]
