@@ -123,6 +123,7 @@ details.panel[open] > summary { margin-bottom: 12px; }
 .cell { width: 46px; height: 34px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; cursor: pointer; border: 1px solid transparent; background: color-mix(in oklab, var(--s1) var(--p, 0%), var(--surface-2)); color: var(--text); }
 .cell.dark { color: #fff; } .cell.none { background: var(--surface-2); color: var(--muted); cursor: default; }
 .cell.nosale { background: repeating-linear-gradient(45deg, var(--surface-2) 0 4px, var(--bg) 4px 8px); color: var(--muted); }
+.cell.future { background: transparent; border: 1px dashed var(--border); color: var(--muted); cursor: default; }
 .cell.sel { border-color: var(--text); } .cell:hover { border-color: var(--accent); } .cell.stale { opacity: .6; }
 .cell.min::after { content: "★"; font-size: .6rem; margin-left: 2px; }
 .cell.new { box-shadow: inset 0 0 0 2px var(--good); }

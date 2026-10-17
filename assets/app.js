@@ -75,6 +75,10 @@
 
   // ---------- pokrytí termínů ----------
   const queries = LATEST.queries || [];
+  const HORIZON = LATEST.booking_horizon || (() => { const d = new Date(LATEST.generated_at); d.setUTCDate(d.getUTCDate() + 329); return d.toISOString().slice(0, 10); })();
+  const HORIZON_DAYS = Math.round((new Date(HORIZON + "T00:00:00Z") - new Date(LATEST.generated_at.slice(0, 10) + "T00:00:00Z")) / 864e5);
+  const opensOn = (retIso) => { const d = new Date(retIso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - HORIZON_DAYS); return d.toISOString().slice(0, 10); };
+  const addDays = (iso, n) => { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
   const byMonth = {};
   for (const q of queries) {
     const m = +q.depart_date.slice(5, 7);
@@ -143,8 +147,10 @@
     const kp = el("div", { class: "routes" });
     const tile = (label, value, hint) => kp.append(el("div", { class: "kpi" }, el("div", { class: "label" }, label), el("div", { class: "value" }, value), el("div", { class: "hint" }, hint || "")));
     if (best) tile(`Pro ${travelers} os.`, czk(best.price * travelers), "nejlepší poměr × počet cestujících");
-    const cov = coverage.map((c) => `${c.name} ${c.okDates}/${c.dates}`).join(" · ");
-    tile("Pokryté termíny", `${coverage.reduce((a, c) => a + c.okDates, 0)}/${coverage.reduce((a, c) => a + c.dates, 0)}`, cov || "–");
+    const inWin = queries.filter((q) => !(q.beyond_horizon || q.return_date > HORIZON));
+    const inWinDates = new Set(inWin.map((q) => q.depart_date)), inWinOk = new Set(inWin.filter((q) => q.status === "ok" && q.count).map((q) => q.depart_date));
+    const allDates = new Set(queries.map((q) => q.depart_date));
+    tile("Termíny v prodeji", `${inWinOk.size}/${inWinDates.size}`, `dnů odletu s nabídkou z těch, které už aerolinky prodávají · ${allDates.size - inWinDates.size} dnů čeká na otevření prodeje`);
     if (days.length >= 2) {
       const minOf = (d) => Math.min(...Object.values(d.routes).map((r) => r.min).filter((x) => x != null));
       const a = minOf(days[days.length - 2]), b = minOf(days[days.length - 1]);
@@ -157,6 +163,13 @@
   function insights() {
     const out = [];
     if (!fresh.length) return out;
+    // prodejní okno
+    const minLen = Math.min(...(cfg.trip_lengths || [14])), maxLen = Math.max(...(cfg.trip_lengths || [14]));
+    const lastDep = cfg.depart_to;
+    if (addDays(lastDep, minLen) > HORIZON) {
+      const firstHidden = (() => { let d = cfg.depart_from; while (addDays(d, minLen) <= HORIZON && d <= lastDep) d = addDays(d, 1); return d; })();
+      out.push(`<strong>Prodejní okno:</strong> aerolinky prodávají ~${HORIZON_DAYS} dní dopředu, dnes tedy do návratu ${dcz(HORIZON)}. Odlety od ${dcz(firstHidden)} se objeví postupně: ${dcz(firstHidden)} ≈ ${dcz(opensOn(addDays(firstHidden, minLen)))}, poslední (${dcz(lastDep)}, ${maxLen} dní) ≈ ${dcz(opensOn(addDays(lastDep, maxLen)))}. Každý nově otevřený termín dostane hlášení „nově v prodeji“.`);
+    }
     const minByKey = (keyFn) => { const m = {}; for (const o of fresh) { const k = keyFn(o); m[k] = Math.min(m[k] ?? Infinity, o.price); } return m; };
     // odkud: párové srovnání na stejných (cíl, odlet, délka)
     const origins = cfg.origins;
@@ -218,11 +231,7 @@
       const alt = routeOrder.filter((x) => x !== r && fresh.some((q) => q._rk === x) && x.endsWith("→" + d)).map(routeName);
       out.push(`<strong>${routeName(r)}</strong>: Google pro tyto termíny zatím nenabízí žádné spojení (ani s přestupy). Sken to kontroluje denně${alt.length ? `; mezitím srovnej ${alt.join(" / ")}` : ""}${d === "HKT" ? " nebo let do Bangkoku a vnitrostátní přelet (≈ 1 500–3 000 Kč)" : ""}.`);
     }
-    // pokrytí
-    const sep = coverage.find((c) => c.month === 9);
-    if (sep && sep.okDates === 0) out.push("Září 2027 zatím nemá žádné nabídky: aerolinky otevírají prodej ~11 měsíců dopředu, termíny se doplní samy.");
-    else if (sep && sep.okDates < sep.dates) out.push(`Září je zatím pokryté jen částečně (${sep.okDates} z ${sep.dates} termínů), zbytek se doplní, jak aerolinky otevřou prodej.`);
-    return out.slice(0, 7);
+    return out.slice(0, 9);
   }
   function renderInsights() {
     const box = $("#insights"); box.innerHTML = "";
@@ -340,9 +349,10 @@
     const box = $("#calendar"); box.innerHTML = "";
     const planDates = [...new Set(queries.map((q) => q.depart_date))].sort();
     if (!planDates.length) { box.append(el("div", { class: "empty" }, "Žádné termíny.")); return; }
-    const cellMin = {}, cellStale = {}, cellStatus = {}, cellNew = {};
+    const cellMin = {}, cellStale = {}, cellStatus = {}, cellNew = {}, cellFuture = {};
     for (const q of queries) {
       const k = `${q.origin}→${q.destination}|${q.depart_date}`;
+      if (q.beyond_horizon || q.return_date > HORIZON) cellFuture[k] = Math.min(cellFuture[k] ?? Infinity, +new Date(q.return_date)) ; 
       const st = q.status === "ok" && q.count ? "ok" : q.status === "empty" ? "empty" : q.status;
       cellStatus[k] = cellStatus[k] === "ok" || st === "ok" ? "ok" : (cellStatus[k] === "empty" || st === "empty" ? "empty" : st);
       if (q.is_new) cellNew[k] = true;
@@ -360,7 +370,13 @@
         for (const d of dates) {
           const k = `${r}|${d}`; const v = cellMin[k]; const st = cellStatus[k];
           let c;
-          if (v == null) c = el("div", { class: "cell " + (st === "empty" ? "nosale" : "none"), title: st === "empty" ? `${routeName(r)} ${dcz(d)}: Google zatím nenabízí žádné spojení (typicky ještě neotevřený prodej)` : `${routeName(r)} ${dcz(d)}: nezjištěno (dotaz neproběhl)` }, st === "empty" ? "·" : "?");
+          if (v == null) {
+            const minRet = cfg.trip_lengths && cfg.trip_lengths.length ? addDays(d, Math.min(...cfg.trip_lengths)) : null;
+            const future = minRet && minRet > HORIZON;
+            c = future
+              ? el("div", { class: "cell future", title: `${routeName(r)} ${dcz(d)}: mimo prodejní okno aerolinek (${HORIZON_DAYS} dní dopředu). Nejkratší pobyt se dá hledat od ≈ ${dcz(opensOn(minRet))}.` }, "→")
+              : el("div", { class: "cell " + (st === "empty" ? "nosale" : "none"), title: st === "empty" ? `${routeName(r)} ${dcz(d)}: v prodejním okně, ale Google zatím nenabízí žádné spojení` : `${routeName(r)} ${dcz(d)}: nezjištěno (dotaz neproběhl)` }, st === "empty" ? "·" : "?");
+          }
           else {
             const p = hi > lo ? 90 - ((v - lo) / (hi - lo)) * 80 : 50;
             c = el("div", { class: "cell" + (p > 55 ? " dark" : "") + (cellStale[k] ? " stale" : "") + (v === globalMin ? " min" : "") + (cellNew[k] ? " new" : ""), style: `--p:${p.toFixed(0)}%`, title: `${routeName(r)} · odlet ${dcz(d)}: od ${czk(v)}/os${cellNew[k] ? " · nově v prodeji" : ""}${cellStale[k] ? " (starší data)" : ""}` }, kcs(v));
@@ -375,7 +391,7 @@
     }
     const L = $("#calendarLegend"); L.innerHTML = "";
     L.append("Cena v tisících Kč/os (nejlevnější ze všech délek pobytu): nejlevnější", el("i", { class: "ramp" }), "nejdražší",
-      el("span", { style: "--c:transparent; margin-left:14px" }, "· = Google zatím nenabízí spojení (typicky neotevřený prodej)"),
+      el("span", { style: "--c:transparent; margin-left:14px" }, `→ = mimo prodejní okno (${HORIZON_DAYS} dní dopředu), otevře se postupně`), el("span", { style: "--c:transparent" }, "· = v okně, ale Google nenabízí spojení"),
       el("span", { style: "--c:transparent" }, "★ = nejnižší cena skenu"), el("span", { style: "--c:var(--good)" }, "zelený rámeček = nově v prodeji"), el("span", { style: "--c:transparent" }, "bledé = starší data"));
   }
   function renderCalendarDetail(r, d) {

@@ -29,6 +29,12 @@ from .sources import azair, google_flights
 log = logging.getLogger("thajland")
 
 
+def booking_horizon(cfg: Config, today: dt.date) -> dt.date:
+    """Poslední datum, pro které aerolinky/GDS typicky už prodávají (výchozí 330 dní dopředu)."""
+    days = int(cfg.scan.get("booking_horizon_days", 330))
+    return today + dt.timedelta(days=days)
+
+
 def _compact(o: dict[str, Any]) -> dict[str, Any]:
     return {"price": o["price"], "score": o.get("score"), "airlines": o.get("airlines", []), "stops": o.get("stops"),
             "route": o.get("route"), "duration_min": o.get("duration_min"),
@@ -74,6 +80,9 @@ def scan(cfg: Config, *, limit: int | None = None, only_source: str | None = Non
     # po 3 potvrzených 'bez výsledků' na trase+měsíci už dotazy téže skupiny neopakujeme (šetří ~10 s/dotaz);
     # klíč zahrnuje měsíc odletu, aby prázdné září nebylo 'resetováno' úspěšným srpnem
     route_empty: dict[str, int] = {}
+    horizon = booking_horizon(cfg, dt.date.fromisoformat(today))
+    log.info("Prodejní okno: návraty do %s (%d dní); dotazy za oknem jen jedním pokusem",
+             horizon, int(sc.get("booking_horizon_days", 330)))
     total = len(plan) * len(sources)
     done = 0
     log.info("Plán: %d dotazů × %d zdrojů = %d; rozpočet %.0f min", len(plan), len(sources), total, budget_s / 60)
@@ -94,9 +103,12 @@ def scan(cfg: Config, *, limit: int | None = None, only_source: str | None = Non
 
             found: list[Offer] = []
             rk = f"{origin}-{dest}-{dep.month}"
+            beyond = ret > horizon
+            qrec["beyond_horizon"] = beyond
             try:
                 if src == "google":
-                    cheap = route_empty.get(rk, 0) >= 3
+                    # za prodejním oknem stačí jeden pokus; uvnitř okna šetříme až po 3 prázdných v řadě (trasa+měsíc)
+                    cheap = beyond or route_empty.get(rk, 0) >= 3
                     found, meta = google_flights.search(
                         origin, dest, dep, ret, currency=cfg.currency, cabin=cfg.cabin,
                         max_stops=cfg.max_stops, retries=1 if cheap else retries,
@@ -179,10 +191,14 @@ def finalize(cfg: Config, parts: list[dict[str, Any]], *, enrich: bool = True) -
     # dotazy, které dnes neproběhly / selhaly: převzít poslední známý výsledek jako 'stale'
     carried = 0
     for i, q in enumerate(queries):
-        if q["status"] in ("skipped_budget", "skipped_blocked", "error"):
+        # neproběhlé/selhané dotazy, nebo 'prázdný' dotaz uvnitř prodejního okna, který minule nabídky měl
+        # (Google občas vrátí dočasně prázdnou stránku) -> převzít poslední známý výsledek jako 'stale'
+        if q["status"] in ("skipped_budget", "skipped_blocked", "error") or \
+                (q["status"] == "empty" and not q.get("beyond_horizon")):
             pq = prev_queries.get(storage.query_key(q))
-            if pq and pq.get("status") == "ok":
-                stale_q = dict(pq, stale=True, status="ok", stale_reason=q["status"])
+            if pq and pq.get("status") == "ok" and not pq.get("stale_days", 0) >= 3:
+                stale_q = dict(pq, stale=True, status="ok", stale_reason=q["status"],
+                               stale_days=int(pq.get("stale_days", 0)) + 1, beyond_horizon=q.get("beyond_horizon"))
                 queries[i] = stale_q
                 for po in prev_offers_by_q.get(storage.query_key(q), []):
                     offers.append(dict(po, stale=True))
@@ -242,6 +258,7 @@ def finalize(cfg: Config, parts: list[dict[str, Any]], *, enrich: bool = True) -
             "scoring": cfg.scoring, "alerts": {"target_price": cfg.raw.get("alerts", {}).get("target_price")},
         },
         "stats": stats, "queries": queries, "offers": offers,
+        "booking_horizon": booking_horizon(cfg, dt.date.fromisoformat(today)).isoformat(),
     }
 
 

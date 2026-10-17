@@ -134,3 +134,29 @@ def test_finalize_merges_parts_and_flags(tmp_path, monkeypatch):
     assert by["PRG2027-08-02"]["is_new"] is True and by["PRG2027-08-02"]["is_new_route"] is False
     assert by["VIE2027-08-01"]["is_new"] is True and by["VIE2027-08-01"]["is_new_route"] is True
     assert payload["stats"]["queries_new"] == 2
+
+
+def test_booking_horizon_and_stale_carry_for_transient_empty(tmp_path, monkeypatch):
+    import datetime as dt
+    from scanner import run as runmod
+    from scanner.config import Config
+    monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(storage, "HISTORY_DIR", tmp_path / "history")
+    cfg = Config(raw={"trip": {"origins": ["PRG"], "destinations": ["BKK"], "depart_from": "2027-08-01",
+                               "depart_to": "2027-08-02", "depart_step_days": 1, "trip_lengths": [14]},
+                      "scan": {"enrich_sellers": False, "booking_horizon_days": 330}, "scoring": {}})
+    assert runmod.booking_horizon(cfg, dt.date(2026, 10, 17)) == dt.date(2027, 9, 12)
+    q_ok = {"origin": "PRG", "destination": "BKK", "depart_date": "2027-08-01", "return_date": "2027-08-15",
+            "source": "google", "status": "ok", "count": 1, "min_price": 20000, "best_score": 20000, "top": None}
+    o_ok = {"id": "a", "source": "google", "origin": "PRG", "destination": "BKK", "depart_date": "2027-08-01",
+            "return_date": "2027-08-15", "nights": 14, "price": 20000, "currency": "CZK", "airlines": ["X"],
+            "stops": 1, "legs": [], "layovers": [], "duration_min": 900, "score": 20000, "links": {"google": "u"}}
+    storage.save_latest({"queries": [q_ok], "offers": [o_ok]})
+    # dnes: stejný dotaz 'empty' uvnitř okna -> převezme se včerejšek jako stale; dotaz za oknem zůstane empty
+    today_q = dict(q_ok, status="empty", count=0, min_price=None, beyond_horizon=False)
+    far_q = dict(q_ok, depart_date="2027-09-20", return_date="2027-10-04", status="empty", count=0, min_price=None, beyond_horizon=True)
+    payload = runmod.finalize(cfg, [{"offers": [], "queries": [today_q, far_q], "scan": {}}], enrich=False)
+    qs = {q["depart_date"]: q for q in payload["queries"]}
+    assert qs["2027-08-01"]["stale"] is True and qs["2027-08-01"]["stale_reason"] == "empty"
+    assert qs["2027-09-20"]["status"] == "empty" and not qs["2027-09-20"].get("stale")
+    assert payload["stats"]["queries_stale"] == 1 and payload["offers"][0]["stale"] is True
