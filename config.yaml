@@ -24,9 +24,9 @@ scan:
   delay_seconds: 3.0
   jitter_seconds: 2.0
   retries: 3
-  # Prodejní okno aerolinek: návraty dál než N dní dopředu Google typicky ještě nenabízí (ověřeno: 329 dní).
+  # Prodejní okno aerolinek: návraty dál než N dní dopředu Google typicky ještě nenabízí (ověřeno: návraty do 329 dní).
   # Takové dotazy se zkouší jen jedním pokusem; uvnitř okna se prázdná odpověď vždy opakuje a ověřuje.
-  booking_horizon_days: 330
+  booking_horizon_days: 329
   # Pojistka proti nekonečným běhům (platí pro jeden běh; v Actions běží Praha a Vídeň paralelně).
   max_queries: 1000
   time_budget_minutes: 80
