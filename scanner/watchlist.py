@@ -111,15 +111,26 @@ def _compact(o: dict[str, Any]) -> dict[str, Any]:
 
 
 def _itin_match(o: dict[str, Any], itin: dict[str, Any]) -> bool:
+    """Stejný let = stejné aerolinky a trasa. Čas odletu se používá jen jako preference (letové řády se posouvají)."""
     if not itin:
         return False
     if itin.get("route") and o.get("route") != itin["route"]:
         return False
     if itin.get("airlines") and sorted(o.get("airlines") or []) != sorted(itin["airlines"]):
         return False
-    if itin.get("dep_time") and o.get("legs") and o["legs"][0]["departure"][11:16] != itin["dep_time"]:
-        return False
     return True
+
+
+def _itin_pick(cands: list[dict[str, Any]], itin: dict[str, Any]) -> dict[str, Any] | None:
+    """Z kandidátů se stejnými aerolinkami/trasou vybrat ten se stejným časem odletu, jinak nejlevnější."""
+    if not cands:
+        return None
+    t = (itin or {}).get("dep_time")
+    if t:
+        same_t = [o for o in cands if o.get("legs") and o["legs"][0]["departure"][11:16] == t]
+        if same_t:
+            return min(same_t, key=lambda o: o["price"])
+    return min(cands, key=lambda o: o["price"])
 
 
 def load_watch_data() -> dict[str, Any]:
@@ -200,7 +211,7 @@ def evaluate(watchlist: dict[str, Any], payload: dict[str, Any], watch_data: dic
         best = min(offs, key=lambda o: (o.get("score") if o.get("score") is not None else o["price"])) if offs else None
         cheapest = min(offs, key=lambda o: o["price"]) if offs else None
         same = [o for o in offs if _itin_match(o, e.get("itin") or {})]
-        same_best = min(same, key=lambda o: o["price"]) if same else None
+        same_best = _itin_pick(same, e.get("itin") or {})
         rec = items.setdefault(k, {"history": []})
         rec["history"] = [h for h in rec["history"] if h["day"] != today]
         rec["history"].append({"day": today, "min": cheapest["price"] if cheapest else None,

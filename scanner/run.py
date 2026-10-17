@@ -89,7 +89,7 @@ def scan(cfg: Config, *, limit: int | None = None, only_source: str | None = Non
     queries: list[dict[str, Any]] = []
     consecutive_blocked = 0
     google_disabled = False
-    pw_not_found_confirmed = 0
+    pw_zero_confirmed: dict[str, int] = {}   # kolikrát Chromium potvrdilo 'prázdno' na trase+měsíci
     # po 3 potvrzených 'bez výsledků' na trase+měsíci už dotazy téže skupiny neopakujeme (šetří ~10 s/dotaz);
     # klíč zahrnuje měsíc odletu, aby prázdné září nebylo 'resetováno' úspěšným srpnem
     route_empty: dict[str, int] = {}
@@ -132,11 +132,13 @@ def scan(cfg: Config, *, limit: int | None = None, only_source: str | None = Non
                         origin, dest, dep, ret, currency=cfg.currency, cabin=cfg.cabin,
                         max_stops=cfg.max_stops, retries=1 if cheap else retries,
                         playwright_fallback=pw_fallback and not cheap,
-                        playwright_on_not_found=pw_not_found_confirmed < 3 and not cheap,
+                        playwright_on_not_found=(is_watched or pw_zero_confirmed.get(rk, 0) < 3) and not cheap,
                         retry_not_found=not cheap)
                     consecutive_blocked = 0
                     if (meta.get("not_found") and meta.get("method") == "playwright") or meta.get("zero_confirmed"):
-                        pw_not_found_confirmed += 1
+                        pw_zero_confirmed[rk] = pw_zero_confirmed.get(rk, 0) + 1
+                    elif found:
+                        pw_zero_confirmed[rk] = 0
                     if not found:
                         route_empty[rk] = route_empty.get(rk, 0) + 1
                     else:

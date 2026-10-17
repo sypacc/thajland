@@ -57,3 +57,16 @@ def test_auto_pin_expires():
                      "auto": True, "added": "2026-10-01", "last_top": "2026-10-01"}]}
     items = w.evaluate(wl, {"day": "2026-10-17", "offers": [_offer("PRG", "BKK", "2027-08-26", "2027-09-09", 15295)]}, {"items": {}})
     assert [i["depart_date"] for i in items] == ["2027-08-26"]
+
+
+def test_itinerary_match_ignores_shifted_departure_time():
+    wl = {"auto": {"enabled": False}, "watch": [{"origin": "VIE", "destination": "HKT", "depart_date": "2027-08-19",
+                                                "return_date": "2027-09-01", "itin": {"airlines": ["Scoot"], "route": "VIE→SIN→HKT", "dep_time": "12:10"}}]}
+    offers = [_offer("VIE", "HKT", "2027-08-19", "2027-09-01", 14254, airlines=("Scoot",), route="VIE→SIN→HKT", dep_time="10:25"),
+              _offer("VIE", "HKT", "2027-08-19", "2027-09-01", 14900, airlines=("Scoot",), route="VIE→SIN→HKT", dep_time="12:10"),
+              _offer("VIE", "HKT", "2027-08-19", "2027-09-01", 13900, airlines=("Emirates",), route="VIE→DXB→HKT")]
+    items = w.evaluate(wl, {"day": "2026-10-17", "offers": offers}, {"items": {}})
+    assert items[0]["same_itinerary"] is True and items[0]["current"]["price"] == 14900   # preferuje stejný čas odletu
+    wl["watch"][0]["itin"]["dep_time"] = "07:00"
+    items = w.evaluate(wl, {"day": "2026-10-17", "offers": offers}, {"items": {}})
+    assert items[0]["current"]["price"] == 14254                                          # jinak nejlevnější Scoot, ne Emirates

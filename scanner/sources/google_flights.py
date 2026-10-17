@@ -216,6 +216,16 @@ def search(origin: str, dest: str, depart: dt.date, ret: dt.date, *, currency: s
             results = parse_html(html)
             meta["method"] = "primp"
             meta["error"] = None
+            if not results and retry_not_found and attempt == 1 and retries > 1:
+                # prázdná stránka bývá dočasná (soft-limit) – jeden levný pokus znovu po pauze
+                time.sleep(5)
+                try:
+                    html = fetch_flights_html(q)
+                    results = parse_html(html)
+                except FlightsNotFound:
+                    results = []
+                except Exception as e:  # noqa: BLE001
+                    log.info("opakování prázdné stránky selhalo: %s", e)
             if not results:
                 _debug_dump(f"google_zero_{origin}-{dest}_{depart}.html", html, limit=20)
                 if playwright_fallback and playwright_on_not_found:
