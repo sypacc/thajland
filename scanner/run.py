@@ -71,7 +71,8 @@ def scan(cfg: Config, *, limit: int | None = None, only_source: str | None = Non
     consecutive_blocked = 0
     google_disabled = False
     pw_not_found_confirmed = 0
-    # po 3 potvrzených 'bez výsledků' na trase už dotazy téže trasy neopakujeme (šetří ~10 s/dotaz)
+    # po 3 potvrzených 'bez výsledků' na trase+měsíci už dotazy téže skupiny neopakujeme (šetří ~10 s/dotaz);
+    # klíč zahrnuje měsíc odletu, aby prázdné září nebylo 'resetováno' úspěšným srpnem
     route_empty: dict[str, int] = {}
     total = len(plan) * len(sources)
     done = 0
@@ -92,7 +93,7 @@ def scan(cfg: Config, *, limit: int | None = None, only_source: str | None = Non
                 qrec["status"] = "skipped_blocked"; queries.append(qrec); continue
 
             found: list[Offer] = []
-            rk = f"{origin}-{dest}"
+            rk = f"{origin}-{dest}-{dep.month}"
             try:
                 if src == "google":
                     cheap = route_empty.get(rk, 0) >= 3
@@ -108,7 +109,7 @@ def scan(cfg: Config, *, limit: int | None = None, only_source: str | None = Non
                     if not found:
                         route_empty[rk] = route_empty.get(rk, 0) + 1
                     else:
-                        route_empty[rk] = 0
+                        route_empty[rk] = max(0, route_empty.get(rk, 0) - 1)
                 else:
                     found, meta = azair.search(origin, dest, dep, ret, currency=cfg.currency)
                 qrec["status"] = "ok" if (found and not meta.get("error")) else "empty"
