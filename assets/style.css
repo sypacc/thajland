@@ -166,3 +166,27 @@ code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-
 .cover .bar { height: 6px; border-radius: 3px; background: var(--border); margin-top: 4px; overflow: hidden; } .cover .bar i { display: block; height: 100%; background: var(--accent); }
 footer { padding: 10px 16px 30px; }
 @media (max-width: 600px) { .chart-wrap { height: 240px; } .hero { grid-template-columns: 1fr; } .alert { grid-template-columns: 1fr; } .alert .body { grid-column: 1; grid-row: auto; } }
+
+/* --- navigace --- */
+.nav { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
+.nav a { font-size: .8rem; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-2); text-decoration: none; background: var(--surface-2); }
+.nav a:hover { border-color: var(--accent); color: var(--accent); }
+section[id], details[id] { scroll-margin-top: 12px; }
+/* --- sledované --- */
+.watch { border-color: var(--accent); }
+.wcard { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--surface-2); display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; }
+.wcard.manual { border-color: var(--accent); }
+.wcard .wtitle { font-weight: 600; }
+.wcard .wsub { color: var(--text-2); font-size: .85rem; }
+.wcard .wprice { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.wcard .wdelta { font-size: .82rem; text-align: right; }
+.wcard .wfoot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: .8rem; color: var(--text-2); }
+.wcard .spark { width: 160px; height: 32px; }
+.wcard .links { grid-column: 1 / -1; }
+.btn-pin { font: inherit; font-size: .8rem; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.btn-pin.on { border-color: var(--good); color: var(--good); }
+.btn-pin.gh { color: var(--accent); border-color: var(--accent); text-decoration: none; display: inline-block; }
+.localpins:not(:empty) { margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 10px; }
+.tag-auto { font-size: .7rem; padding: 1px 6px; border-radius: 999px; background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent); }
+.tag-manual { font-size: .7rem; padding: 1px 6px; border-radius: 999px; background: var(--good-bg); color: var(--good); border: 1px solid var(--good); }
+@media (max-width: 600px) { .wcard { grid-template-columns: 1fr; } .wcard .wprice, .wcard .wdelta { text-align: left; } }

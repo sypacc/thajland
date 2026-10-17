@@ -15,12 +15,23 @@
       <h1>Thajsko 2027 <span class="muted">· letenky z Česka · 2 týdny · srpen–září</span></h1>
       <div id="status" class="status">Načítám data…</div>
     </div>
+    <nav class="nav" aria-label="Sekce">
+      <a href="#watch">Sledované</a><a href="#alertsPanel">Hlášení</a><a href="#deals">Nabídky</a><a href="#calendarPanel">Kalendář</a><a href="#trend">Vývoj</a><a href="#allPanel">Vše</a><a href="#howto">Jak číst</a>
+    </nav>
   </div>
 </header>
 
 <main class="wrap">
   <!-- 1. Verdikt -->
   <section id="verdict" class="hero" aria-label="Verdikt"></section>
+
+  <!-- 1b. Sledované lety -->
+  <section id="watch" class="panel watch">
+    <div class="panel-head"><h2>Sledované lety</h2><span id="watchMeta" class="muted small"></span></div>
+    <p class="muted small">Tyhle lety mají ve skenu prioritu, vlastní historii ceny a hlášení při každé změně. Automaticky se sem dostane pár nejlepších dealů; cokoliv dalšího přidáš tlačítkem <strong>Sledovat</strong> u nabídky.</p>
+    <div id="watchList" class="cards"></div>
+    <div id="localPins" class="localpins"></div>
+  </section>
 
   <!-- 2. Postřehy -->
   <section id="insights" class="panel insights" aria-label="Postřehy"></section>
@@ -32,7 +43,7 @@
   </section>
 
   <!-- 4. Nejlepší nabídky -->
-  <section class="panel">
+  <section class="panel" id="deals">
     <div class="panel-head">
       <h2>Nejlepší nabídky teď</h2>
       <div id="dealTabs" class="tabs" role="tablist"></div>
@@ -42,7 +53,7 @@
   </section>
 
   <!-- 5. Kalendář cen -->
-  <section class="panel">
+  <section class="panel" id="calendarPanel">
     <div class="panel-head"><h2>Kalendář cen</h2><span class="muted small">nejnižší cena/os pro den odletu · klikni na políčko</span></div>
     <div id="calendar" class="calendar"></div>
     <div id="calendarLegend" class="legend small"></div>
@@ -50,7 +61,7 @@
   </section>
 
   <!-- 6. Trend -->
-  <section class="panel">
+  <section class="panel" id="trend">
     <div class="panel-head"><h2>Vývoj ceny v čase</h2><span id="trendMeta" class="muted small"></span></div>
     <div class="table-wrap">
       <table id="overview">
@@ -86,9 +97,10 @@
     <div id="runinfo" class="small"></div>
   </details>
 
-  <details class="panel notes">
+  <details class="panel notes" id="howto">
     <summary><h2>Jak to číst</h2><span class="muted small">zdroje, skóre, hlášení, omezení</span></summary>
     <ul>
+      <li><strong>Sledované lety</strong>: tlačítko „Sledovat“ u nabídky otevře předvyplněné GitHub issue (jen potvrdíš „Submit“); robot ho během minuty zapíše do <code>watchlist.yaml</code>, issue zavře a od dalšího skenu má let prioritu, vlastní křivku ceny a hlášení při zlevnění/zdražení/zmizení. „Jen v tomto prohlížeči“ je rychlý pin bez GitHubu (neovlivní sken). Pár nejlepších dealů se sleduje automaticky.</li>
       <li><strong>Verdikt</strong> porovnává dnešní nejnižší cenu na trase s mediánem všech dosavadních měření. Prvních pár dní jen sbíráme data, pak se objeví doporučení „kupovat / férová cena / počkat“.</li>
       <li><strong>Skóre = efektivní cena v Kč</strong>: cena + penalizace za čas nad 14 h, za 2. a další přestup, za dlouhé (&gt;5 h) nebo rizikově krátké (&lt;1 h) přestupy ± korekce za aerolinku; přímý let má bonus. Čím nižší, tím lepší. Váhy jsou v <code>config.yaml</code>.</li>
       <li><strong>Hlášení</strong>: cena pod cílovou hranicí, prudký pokles od minula, výrazně pod mediánem historie termínu, nové minimum trasy. Posílají se jako GitHub issue, volitelně Telegram / ntfy / e-mail.</li>
@@ -103,6 +115,7 @@
 <script src="data/latest.js"></script>
 <script src="data/series.js"></script>
 <script src="data/alerts.js"></script>
+<script src="data/watch.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>

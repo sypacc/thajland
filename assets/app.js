@@ -4,6 +4,11 @@
   const LATEST = window.THAJLAND_LATEST || null;
   const SERIES = window.THAJLAND_SERIES || { days: [] };
   const ALERTS = (window.THAJLAND_ALERTS && window.THAJLAND_ALERTS.alerts) || [];
+  const REPO = (() => { try { const h = location.hostname, m = h.match(/^([^.]+)\.github\.io$/); const seg = location.pathname.split("/").filter(Boolean)[0]; if (m && seg) return `${m[1]}/${seg}`; } catch (e) {} return "sypacc/thajland"; })();
+  const issueUrl = (title, body, label) => `https://github.com/${REPO}/issues/new?${new URLSearchParams({ title, body, labels: label }).toString()}`;
+  const LS_KEY = "thajland.pins";
+  const loadPins = () => { try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch (e) { return []; } };
+  const savePins = (p) => { try { localStorage.setItem(LS_KEY, JSON.stringify(p)); } catch (e) {} };
   const $ = (s) => document.querySelector(s);
   const el = (tag, attrs, ...kids) => {
     const n = document.createElement(tag);
@@ -245,6 +250,7 @@
   function badges(o) {
     const b = [];
     b.push(el("span", { class: "badge " + (o.stops === 0 ? "good" : o.stops >= 2 ? "warn" : "") }, o.stops === 0 ? "přímý let" : o.stops === 1 ? "1 přestup" : `${o.stops} přestupy`));
+    if (o.watched) b.push(el("span", { class: "badge good" }, "★ sledováno"));
     if (o.is_new_route) b.push(el("span", { class: "badge good" }, "nová trasa v prodeji"));
     else if (o.is_new) b.push(el("span", { class: "badge good" }, "nově v prodeji"));
     if (o.is_all_time_low) b.push(el("span", { class: "badge good" }, "nejnižší cena dosud"));
@@ -320,7 +326,88 @@
       el("div", { class: "dates" }, `${wd(o.depart_date)} ${dcz(o.depart_date)} → ${wd(o.return_date)} ${dcz(o.return_date)} · ${o.nights} dní`),
       timeline(o), badges(o), sellersRow(o),
       el("div", { class: "why" }, why(o), days.length >= 2 ? [" · vývoj termínu: ", sparkline(queryHistory(o), 80, 20)] : null),
-      linkRow(o));
+      linkRow(o), pinButtons(o));
+  }
+
+  // ---------- sledování (piny) ----------
+  const wkey = (o) => `${o.origin}|${o.destination}|${o.depart_date}|${o.return_date}`;
+  const itinOf = (o) => ({ airlines: o.airlines || [], route: o.route, dep_time: o.legs && o.legs.length ? tm(o.legs[0].departure) : null });
+  const WATCH = (LATEST.watch || []);
+  const watchedKeys = new Set(WATCH.map((w) => w.key));
+  const watchIssue = (o, unwatch = false) => {
+    const title = `${unwatch ? "unwatch" : "watch"}: ${o.origin}→${o.destination} ${o.depart_date} → ${o.return_date}`;
+    const it = itinOf(o);
+    const body = unwatch ? "Zrušit sledování tohoto letu." : `Sledovat tento let (${(it.airlines || []).join(", ")} · ${it.route} · odlet ${it.dep_time || "?"} · ${czk(o.price)}).\n\n\u0060\u0060\u0060json\n${JSON.stringify({ itin: it, price_at_add: o.price, note: "" }, null, 0)}\n\u0060\u0060\u0060\n\nStačí kliknout na „Submit new issue“. Robot let zapíše do watchlist.yaml a issue zavře.`;
+    return issueUrl(title, body, "watch");
+  };
+  let pins = loadPins();
+  const isPinned = (o) => pins.some((p) => p.key === wkey(o) && (!p.itin || !p.itin.route || p.itin.route === o.route));
+  function pinButtons(o) {
+    const box = el("div", { class: "links" });
+    if (watchedKeys.has(wkey(o))) box.append(el("span", { class: "tag-manual" }, "✓ sledováno"));
+    else box.append(el("a", { class: "btn-pin gh", href: watchIssue(o), target: "_blank", rel: "noopener", title: "Trvalé sledování: otevře předvyplněné GitHub issue, stačí potvrdit. Let pak má prioritu ve skenu, vlastní historii a hlášení." }, "★ Sledovat (GitHub)"));
+    const b = el("button", { class: "btn-pin" + (isPinned(o) ? " on" : ""), title: "Rychlý pin jen v tomto prohlížeči (bez GitHubu, neovlivní sken)" }, isPinned(o) ? "✓ připnuto zde" : "připnout jen zde");
+    b.addEventListener("click", () => { if (isPinned(o)) pins = pins.filter((p) => !(p.key === wkey(o) && (!p.itin || p.itin.route === o.route))); else pins.push({ key: wkey(o), itin: itinOf(o), price_at_pin: o.price, day: LATEST.day }); savePins(pins); renderLocalPins(); renderDeals(); });
+    box.append(b);
+    return box;
+  }
+  const changeCell = (cur, prev, label) => {
+    if (cur == null || prev == null) return el("span", { class: "muted" }, `${label}: –`);
+    const d = cur - prev; const cls = d < 0 ? "trend-down" : d > 0 ? "trend-up" : "";
+    return el("span", { class: cls }, `${label}: ${d > 0 ? "+" : ""}${czk(d)} (${d > 0 ? "+" : ""}${(d / prev * 100).toFixed(0)} %)`);
+  };
+  function watchCard(w) {
+    const cur = w.current; const it = w.itin || {};
+    const c = el("div", { class: "wcard " + (w.auto ? "auto" : "manual") });
+    c.append(el("div", null,
+      el("div", { class: "wtitle" }, `${routeName(`${w.origin}→${w.destination}`)} `, el("span", { class: w.auto ? "tag-auto" : "tag-manual" }, w.auto ? "automaticky" : "můj pin")),
+      el("div", { class: "wsub" }, `${wd(w.depart_date)} ${dcz(w.depart_date)} → ${dcz(w.return_date)} · ${(it.airlines || (cur && cur.airlines) || []).join(", ") || "libovolná aerolinka"}${it.route ? " · " + it.route : ""}${it.dep_time ? " · odlet " + it.dep_time : ""}${w.note ? " · " + w.note : ""}`)));
+    if (cur) {
+      c.append(el("div", null, el("div", { class: "wprice" }, czk(cur.price)), el("div", { class: "wdelta" }, changeCell(cur.price, w.prev_price, "od minula"))));
+    } else {
+      c.append(el("div", null, el("div", { class: "wprice muted" }, "–"), el("div", { class: "wdelta bad" }, w.prev_price ? `dnes není v nabídce (naposledy ${czk(w.prev_price)} ${w.prev_day ? dshort(w.prev_day) : ""})` : "zatím bez nabídky")));
+    }
+    const foot = el("div", { class: "wfoot" },
+      sparkline((w.history || []).map((h) => h.itin != null ? h.itin : h.min), 160, 32),
+      w.price_at_add != null && cur ? changeCell(cur.price, w.price_at_add, `od přidání (${dshort(w.added || LATEST.day)})`) : null,
+      w.min_seen != null ? el("span", null, `min ${czk(w.min_seen)} · max ${czk(w.max_seen)} · ${(w.history || []).length} měření`) : null,
+      cur && !w.same_itinerary && it.route ? el("span", { class: "warn" }, "stejný let dnes nenalezen, ukazuji nejlevnější na termín") : null,
+      cur && w.cheapest_any && w.cheapest_any.price < cur.price ? el("span", null, `nejlevnější na termín: ${czk(w.cheapest_any.price)} (${(w.cheapest_any.airlines || []).join(", ")})`) : null);
+    c.append(foot);
+    const o = { origin: w.origin, destination: w.destination, depart_date: w.depart_date, return_date: w.return_date, price: cur ? cur.price : (w.prev_price || 0), airlines: it.airlines || [], route: it.route, legs: [] };
+    const links = el("div", { class: "links" });
+    const gl = (cur && cur.links && cur.links.google) || buildLinks(o).google;
+    if (gl) links.append(el("a", { class: "primary", href: gl, target: "_blank", rel: "noopener" }, "Koupit přes Google Flights"));
+    const bl = buildLinks(o); ["kiwi", "skyscanner", "kayak"].forEach((k) => links.append(el("a", { href: bl[k], target: "_blank", rel: "noopener" }, LINK_NAMES[k])));
+    links.append(w.auto ? el("a", { class: "btn-pin gh", href: watchIssue(o), target: "_blank", rel: "noopener" }, "★ Nechat trvale") : el("a", { class: "btn-pin", href: watchIssue(o, true), target: "_blank", rel: "noopener" }, "zrušit sledování"));
+    c.append(links);
+    return c;
+  }
+  function renderWatch() {
+    const box = $("#watchList"); box.innerHTML = "";
+    $("#watchMeta").textContent = WATCH.length ? `${WATCH.filter((w) => !w.auto).length} vlastních · ${WATCH.filter((w) => w.auto).length} automaticky · priorita ve skenu` : "";
+    if (!WATCH.length) { box.append(el("div", { class: "empty" }, "Zatím nic. Po příštím skenu se sem automaticky přidají nejlepší dealy; vlastní let přidáš tlačítkem „★ Sledovat“ u nabídky níže.")); return; }
+    WATCH.forEach((w) => box.append(watchCard(w)));
+  }
+  function renderLocalPins() {
+    const box = $("#localPins"); box.innerHTML = "";
+    if (!pins.length) return;
+    box.append(el("div", { class: "panel-head" }, el("h2", null, "Připnuto jen v tomto prohlížeči"), el("span", { class: "muted small" }, "neovlivňuje sken; pro trvalé sledování použij ★ Sledovat (GitHub)")));
+    const list = el("div", { class: "cards" });
+    for (const p of pins) {
+      const [o, d, dep, ret] = p.key.split("|");
+      const cands = offers.filter((x) => wkey(x) === p.key);
+      const same = cands.filter((x) => !p.itin || !p.itin.route || x.route === p.itin.route);
+      const cur = (same.length ? same : cands).sort((a, b) => a.price - b.price)[0];
+      const w = { origin: o, destination: d, depart_date: dep, return_date: ret, itin: p.itin, auto: false, added: p.day, price_at_add: p.price_at_pin,
+        current: cur ? { price: cur.price, airlines: cur.airlines, links: cur.links } : null, same_itinerary: !!same.length, cheapest_any: cands.length ? { price: Math.min(...cands.map((x) => x.price)), airlines: cands.sort((a, b) => a.price - b.price)[0].airlines } : null,
+        history: queryHistory({ origin: o, destination: d, depart_date: dep, return_date: ret, source: "google" }).map((m) => ({ min: m })), prev_price: null };
+      const card = watchCard(w);
+      const unpin = el("button", { class: "btn-pin" }, "odepnout"); unpin.addEventListener("click", () => { pins = pins.filter((x) => x !== p); savePins(pins); renderLocalPins(); renderDeals(); });
+      card.querySelector(".links").append(unpin);
+      list.append(card);
+    }
+    box.append(list);
   }
 
   // ---------- dealy (taby) ----------
@@ -514,7 +601,7 @@
       tb.append(tr);
       btn.addEventListener("click", () => {
         if (tr.nextSibling && tr.nextSibling.classList.contains("detail")) { tr.nextSibling.remove(); return; }
-        tr.after(el("tr", { class: "detail" }, el("td", { colspan: "11" }, timeline(o), badges(o), legList(o), sellersRow(o), el("div", { class: "why" }, why(o)), el("div", { class: "small muted" }, "Vývoj ceny tohoto termínu: ", sparkline(queryHistory(o))), linkRow(o))));
+        tr.after(el("tr", { class: "detail" }, el("td", { colspan: "11" }, timeline(o), badges(o), legList(o), sellersRow(o), el("div", { class: "why" }, why(o)), el("div", { class: "small muted" }, "Vývoj ceny tohoto termínu: ", sparkline(queryHistory(o))), linkRow(o), pinButtons(o))));
       });
     });
     $("#more").hidden = rows.length <= shown;
@@ -536,7 +623,7 @@
     if (errs.length) r.append(el("details", null, el("summary", null, `Chyby (${errs.length})`), el("ul", { class: "small" }, errs.slice(0, 30).map((q) => el("li", null, `${q.source} ${q.origin}→${q.destination} ${q.depart_date}: ${q.error || q.status}`)))));
   }
 
-  renderVerdict(); renderInsights(); renderAlerts(); renderDeals(); renderCalendar(); renderOverview(); renderChartHistory(); buildFilters(); renderTable(); renderRunInfo();
+  renderVerdict(); renderWatch(); renderLocalPins(); renderInsights(); renderAlerts(); renderDeals(); renderCalendar(); renderOverview(); renderChartHistory(); buildFilters(); renderTable(); renderRunInfo();
   if (ALERTS.length) $("#alertsPanel").scrollIntoView && 0;
   if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { renderChartHistory(); renderCalendar(); });
 })();

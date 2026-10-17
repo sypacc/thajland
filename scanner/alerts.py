@@ -23,6 +23,10 @@ KIND_LABEL = {
     "route_low": "nové minimum trasy",
     "new_dates": "nově v prodeji",
     "new_route": "nová trasa v prodeji",
+    "watch_drop": "sledovaný let zlevnil",
+    "watch_low": "sledovaný let na minimu",
+    "watch_up": "sledovaný let zdražil",
+    "watch_gone": "sledovaný let zmizel z nabídky",
 }
 
 
@@ -98,7 +102,10 @@ def detect(payload: dict[str, Any], history: list[dict[str, Any]], cfg: dict[str
     reasons: dict[str, list[tuple[str, str, str, dict[str, Any]]]] = {}
 
     def add(kind: str, o: dict[str, Any], reason: str, severity: str, **extra):
-        reasons.setdefault(_qkey(o), []).append((kind, reason, severity, extra))
+        key = ("watch|" if kind.startswith("watch_") else "") + _qkey(o)
+        if kind.startswith("watch_"):
+            best_by_q.setdefault(key, o)
+        reasons.setdefault(key, []).append((kind, reason, severity, extra))
 
     for k, o in best_by_q.items():
         p = o["price"]
@@ -140,13 +147,40 @@ def detect(payload: dict[str, Any], history: list[dict[str, Any]], cfg: dict[str
             f"{len(dates)} nových dnů odletu ({dates[0]} – {dates[-1]}), od {min(x['price'] for x in items)} Kč",
             "medium", new_dates=len(dates), new_months=months)
 
+    # 6) sledované lety: změna ceny proti minulému měření / minimu
+    w_drop_pct = float(cfg.get("watch_drop_pct", 3)); w_drop_czk = float(cfg.get("watch_drop_czk", 400))
+    w_up_pct = float(cfg.get("watch_up_pct", 10))
+    for w in payload.get("watch", []) or []:
+        cur = w.get("current"); prev = w.get("prev_price")
+        if not cur:
+            if prev is not None and w.get("prev_day"):
+                ghost = {"id": w["key"], "source": "google", "origin": w["origin"], "destination": w["destination"],
+                         "depart_date": w["depart_date"], "return_date": w["return_date"],
+                         "nights": (dt.date.fromisoformat(w["return_date"]) - dt.date.fromisoformat(w["depart_date"])).days,
+                         "price": prev, "currency": "CZK", "airlines": (w.get("itin") or {}).get("airlines", []),
+                         "stops": None, "route": (w.get("itin") or {}).get("route"), "duration_min": None,
+                         "links": {}, "score": None}
+                add("watch_gone", ghost, f"sledovaný let (naposledy {prev} Kč, {w['prev_day']}) dnes v nabídce není", "medium")
+            continue
+        base = dict(cur, source="google", origin=w["origin"], destination=w["destination"], depart_date=w["depart_date"],
+                    return_date=w["return_date"], currency="CZK",
+                    nights=(dt.date.fromisoformat(w["return_date"]) - dt.date.fromisoformat(w["depart_date"])).days)
+        p = cur["price"]
+        if prev is not None and (prev - p >= w_drop_czk or (prev - p) / prev * 100 >= w_drop_pct):
+            add("watch_drop", base, f"sledovaný let zlevnil z {prev} na {p} Kč ({(prev - p) / prev * 100:.0f} %)", "high", previous_price=prev)
+        elif w.get("min_seen") is not None and p <= w["min_seen"] and len(w.get("history") or []) >= 3 and prev is not None and p < prev:
+            add("watch_low", base, f"sledovaný let je na svém minimu ({p} Kč za {len(w['history'])} měření)", "high")
+        if prev is not None and (p - prev) / prev * 100 >= w_up_pct:
+            add("watch_up", base, f"sledovaný let zdražil z {prev} na {p} Kč (+{(p - prev) / prev * 100:.0f} %)", "info", previous_price=prev)
+
     sev_rank = {"high": 0, "medium": 1, "info": 2}
     out: list[dict[str, Any]] = []
     now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     for k, items in reasons.items():
         o = best_by_q[k]
         prev = recent.get(k)
-        if prev is not None and o["price"] > prev - improve:
+        kinds0 = {i[0] for i in items}
+        if prev is not None and o["price"] > prev - improve and not (kinds0 & {"watch_up", "watch_gone"}):
             continue  # stejný termín hlášen nedávno a cena neklesla dost
         kinds = [i[0] for i in items]
         extra: dict[str, Any] = {}

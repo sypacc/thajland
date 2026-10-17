@@ -28,6 +28,23 @@ a dashboard, který ukazuje nejlepší příležitosti podle **poměru cena/výk
    vs. minule / 7 / 30 dní, minima, sparklines, graf) → sbalená tabulka všech nabídek s filtry a předvolbami →
    stav skenu a pokrytí termínů → metodika.
 
+## Sledované lety (piny)
+
+Hlavní pracovní režim: pár vybraných levných letů se hlídá přednostně.
+
+- **Přidání z dashboardu:** tlačítko **★ Sledovat (GitHub)** u nabídky otevře předvyplněné issue
+  (`watch: PRG→BKK 2027-08-26 → 2027-09-09` + itinerář v těle). Stačí potvrdit „Submit new issue“;
+  workflow `watch.yml` ho zapíše do `watchlist.yaml`, commitne a issue zavře. Zrušení: `unwatch: …`.
+- **Automaticky:** po každém skenu se do sledování přidá 5 nejlepších dealů (různé itineráře, max. 2 na trasu);
+  když vypadnou z top 5 na víc než 10 dní, zase zmizí. Nastavení v `watchlist.yaml` → `auto`.
+- **Co sledování dělá:** dotazy sledovaných letů jdou ve skenu první a vždy s plným opakováním; hlídá se cena
+  *stejného letu* (aerolinky + trasa + čas odletu), ne jen nejlevnější na termín; historie je v `data/watch.json`;
+  hlášení „sledovaný let zlevnil / na minimu / zdražil / zmizel z nabídky“.
+- **„Připnout jen zde“** je rychlý pin uložený jen v prohlížeči (bez GitHubu, neovlivní sken).
+
+Termíny na hranici prodejního okna (~330 dní dopředu) se skenují hned po sledovaných letech, takže nově
+otevřené zářijové dny se objeví v den otevření a dostanou hlášení „nově v prodeji“.
+
 ## Hlášení dealů (alerty)
 
 Po každém běhu se nabídky porovnají s historií a vzniknou hlášení (`data/alerts.json`, sekce „Hlášení“ v dashboardu):
@@ -39,6 +56,7 @@ Po každém běhu se nabídky porovnají s historií a vzniknou hlášení (`dat
 | abnormálně nízko | ≥ 15 % pod mediánem historických minim daného termínu (po ≥ 5 bězích) |
 | nové minimum trasy | nejnižší cena na trase za celou historii (po ≥ 3 bězích) |
 | nově v prodeji / nová trasa | termín nebo celá trasa, která se v historii (≥ 3 běhy) nikdy neobjevila a teď má nabídky – typicky nově otevřený prodej (září, Praha → Phuket) |
+| sledovaný let zlevnil / na minimu / zdražil / zmizel | změna ceny sledovaného letu proti minulému měření (≥ 3 % nebo ≥ 400 Kč; zdražení ≥ 10 %) |
 
 Jedna nabídka = jedno hlášení se všemi důvody, max. 8 za běh, stejný termín se neopakuje 7 dní (pokud neklesne o dalších 500 Kč).
 

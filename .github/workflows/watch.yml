@@ -1,0 +1,56 @@
+name: Sledování letu z issue
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  watch:
+    if: startsWith(github.event.issue.title, 'watch:') || startsWith(github.event.issue.title, 'unwatch:') || startsWith(github.event.issue.title, 'sledovat:') || startsWith(github.event.issue.title, 'zrusit:')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: watchlist
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      - name: Zapsat do watchlist.yaml
+        id: apply
+        env:
+          TITLE: ${{ github.event.issue.title }}
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          printf '%s' "$BODY" > /tmp/body.md
+          set +e
+          OUT=$(python -m scanner.watch_issue --title "$TITLE" --body-file /tmp/body.md)
+          RC=$?
+          set -e
+          echo "$OUT"
+          echo "result<<EOF" >> "$GITHUB_OUTPUT"; echo "$OUT" >> "$GITHUB_OUTPUT"; echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "rc=$RC" >> "$GITHUB_OUTPUT"
+      - name: Commit
+        if: steps.apply.outputs.rc == '0'
+        run: |
+          git config user.name "thajland-bot"
+          git config user.email "thajland-bot@users.noreply.github.com"
+          git add watchlist.yaml
+          git diff --cached --quiet || (git commit -m "watchlist: ${{ github.event.issue.title }}" && git pull --rebase origin "${{ github.event.repository.default_branch }}" && git push origin "HEAD:${{ github.event.repository.default_branch }}")
+      - name: Odpovědět a zavřít issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RESULT="${{ steps.apply.outputs.result }}"
+          if [ "${{ steps.apply.outputs.rc }}" = "0" ]; then
+            gh issue comment ${{ github.event.issue.number }} --body "✅ $RESULT. Let má od dalšího skenu prioritu a vlastní historii v sekci „Sledované lety“ na dashboardu."
+            gh issue close ${{ github.event.issue.number }}
+          else
+            gh issue comment ${{ github.event.issue.number }} --body "❌ $RESULT"
+          fi

@@ -21,6 +21,7 @@ from typing import Any
 
 from . import alerts as alerts_mod
 from . import storage
+from . import watchlist as watch_mod
 from .config import Config, load_config
 from .model import Offer
 from .scoring import rank, score_offer
@@ -68,6 +69,18 @@ def scan(cfg: Config, *, limit: int | None = None, only_source: str | None = Non
         plan = [p for p in plan if p[0] == o_ and p[1] == d_]
     if shuffle:
         random.Random(today).shuffle(plan)
+    # priorita: 1) sledované lety, 2) termíny na hranici prodejního okna (otevírají se právě teď), 3) zbytek
+    horizon0 = booking_horizon(cfg, dt.date.fromisoformat(today))
+    watched = {watch_mod.watch_key(w["origin"], w["destination"], w["depart_date"], w["return_date"])
+               for w in (watch_mod.normalize_entry(x) for x in watch_mod.load_watchlist().get("watch", [])) if w}
+    def _prio(p):
+        o_, d_, dep_, ret_ = p
+        if watch_mod.watch_key(o_, d_, dep_.isoformat(), ret_.isoformat()) in watched:
+            return 0
+        if horizon0 - dt.timedelta(days=3) <= ret_ <= horizon0 + dt.timedelta(days=4):
+            return 1
+        return 2
+    plan.sort(key=_prio)
     if limit:
         plan = plan[:limit]
     plan = plan[:max_queries]
@@ -105,10 +118,16 @@ def scan(cfg: Config, *, limit: int | None = None, only_source: str | None = Non
             rk = f"{origin}-{dest}-{dep.month}"
             beyond = ret > horizon
             qrec["beyond_horizon"] = beyond
+            is_watched = watch_mod.watch_key(origin, dest, dep.isoformat(), ret.isoformat()) in watched
+            frontier = horizon - dt.timedelta(days=3) <= ret <= horizon + dt.timedelta(days=4)
+            if is_watched:
+                qrec["watched"] = True
+            if frontier:
+                qrec["frontier"] = True
             try:
                 if src == "google":
                     # za prodejním oknem stačí jeden pokus; uvnitř okna šetříme až po 3 prázdných v řadě (trasa+měsíc)
-                    cheap = beyond or route_empty.get(rk, 0) >= 3
+                    cheap = (beyond and not frontier and not is_watched) or (route_empty.get(rk, 0) >= 3 and not is_watched)
                     found, meta = google_flights.search(
                         origin, dest, dep, ret, currency=cfg.currency, cabin=cfg.cabin,
                         max_stops=cfg.max_stops, retries=1 if cheap else retries,
@@ -233,6 +252,14 @@ def finalize(cfg: Config, parts: list[dict[str, Any]], *, enrich: bool = True) -
         if isinstance(o.get("links"), dict) and "google" in o["links"]:
             o["links"] = {"google": o["links"]["google"]}
 
+    # sledované lety (ruční piny + automatické top dealy)
+    wl = watch_mod.load_watchlist()
+    wd = watch_mod.load_watch_data()
+    watch_items = watch_mod.evaluate(wl, {"day": today, "offers": offers}, wd)
+    watched_keys = {w["key"] for w in watch_items}
+    for o in offers:
+        o["watched"] = watch_mod.watch_key(o["origin"], o["destination"], o["depart_date"], o["return_date"]) in watched_keys
+
     ok = [q for q in queries if q["status"] == "ok" and not q.get("stale")]
     prices = [q["min_price"] for q in queries if q.get("min_price")]
     stats = {
@@ -259,6 +286,7 @@ def finalize(cfg: Config, parts: list[dict[str, Any]], *, enrich: bool = True) -
         },
         "stats": stats, "queries": queries, "offers": offers,
         "booking_horizon": booking_horizon(cfg, dt.date.fromisoformat(today)).isoformat(),
+        "watch": watch_items, "_watchlist": wl, "_watch_data": wd,
     }
 
 
@@ -300,6 +328,11 @@ def save_all(cfg: Config, payload: dict[str, Any], *, notify: bool = True) -> No
     for a in new_alerts:
         log.info("  %s %s %s→%s %s: %s", a["kind_label"], a["price"], a["origin"], a["destination"],
                  a["depart_date"], a["reason"])
+    wl = payload.pop("_watchlist", None); wd = payload.pop("_watch_data", None)
+    if wl is not None:
+        watch_mod.save_watchlist(wl)
+    if wd is not None:
+        watch_mod.save_watch_data(wd)
     storage.save_latest(payload)
     storage.save_history_snapshot(payload["day"], payload["queries"])
     storage.save_series(storage.build_series(storage.load_history()))
