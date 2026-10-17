@@ -49,7 +49,11 @@ jobs:
         run: |
           RESULT="${{ steps.apply.outputs.result }}"
           if [ "${{ steps.apply.outputs.rc }}" = "0" ]; then
-            gh issue comment ${{ github.event.issue.number }} --body "✅ $RESULT. Let má od dalšího skenu prioritu a vlastní historii v sekci „Sledované lety“ na dashboardu."
+            case "$RESULT" in
+              unwatch*) MSG="✅ $RESULT. Od dalšího skenu už se tento let zvlášť nesleduje." ;;
+              *)        MSG="✅ $RESULT. Od dalšího skenu má let prioritu, vlastní historii a hlášení v sekci „Lety ke sledování“ na dashboardu." ;;
+            esac
+            gh issue comment ${{ github.event.issue.number }} --body "$MSG"
             gh issue close ${{ github.event.issue.number }}
           else
             gh issue comment ${{ github.event.issue.number }} --body "❌ $RESULT"
