@@ -9,16 +9,4 @@ auto:
   enabled: true
   top: 5
   keep_days: 10
-watch:
-- origin: VIE
-  destination: HKT
-  depart_date: '2027-08-19'
-  return_date: '2027-09-01'
-  itin:
-    airlines:
-    - Scoot
-    route: VIE→SIN→HKT
-    dep_time: '12:10'
-  note: test z Claude
-  price_at_add: 14252
-  added: '2026-10-17'
+watch: []
