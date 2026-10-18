@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { buildLinks, city, czk, dcz, dshort, durShort, loadPins, routeName, savePins, sortBy, watchIssue, wd, wkey, LINK_NAMES } from "../lib/format.js";
+import { buildLinks, city, czk, dcz, dshort, durShort, loadPending, loadPins, routeName, savePending, savePins, sortBy, wd, wkey, LINK_NAMES } from "../lib/format.js";
+import { addWatch, removeWatch, usePending } from "../lib/watchActions.js";
 import { Badges, Links, PinButtons, Sellers, Sparkline, Timeline, scoreWhy } from "./Shared.jsx";
 
 function Delta({ cur, prev, label }) {
@@ -9,6 +10,10 @@ function Delta({ cur, prev, label }) {
 }
 
 export function WatchCard({ w, M, extra }) {
+  const pending = usePending();
+  const [busy, setBusy] = useState(false);
+  const act = async (fn) => { setBusy(true); try { await fn(o); } finally { setBusy(false); } };
+  const pend = pending.find((p) => p.key === w.key);
   const cur = w.current; const it = w.itin || {};
   const state = !cur ? "missing" : (w.prev_price != null && cur.price < w.prev_price) ? "down" : (w.prev_price != null && cur.price > w.prev_price) ? "up" : "";
   const nick = w.nick || ((cur && cur.airlines) || it.airlines || []).join(", ");
@@ -40,7 +45,10 @@ export function WatchCard({ w, M, extra }) {
         {bl.google ? <a className="primary" href={bl.google} target="_blank" rel="noopener" title="Přesně tento dotaz na Google Flights – vybereš zpáteční let a prodejce">Koupit přes Google Flights</a> : null}
         {["kiwi", "skyscanner", "kayak"].map((k) => <a key={k} className="search" href={bl[k]} target="_blank" rel="noopener" title="Otevře vyhledávání s předvyplněným termínem; jejich ceny automaticky číst nejde">hledat na {LINK_NAMES[k]}</a>)}
         {extra}
-        {w.auto ? <a className="btn-pin gh" href={watchIssue(o)} target="_blank" rel="noopener">★ Nechat trvale</a> : (w.local ? null : <a className="btn-pin" href={watchIssue(o, true)} target="_blank" rel="noopener">zrušit sledování</a>)}
+        {w.pending ? <span className="tag-manual" title={`Issue #${w.pendingIssue} čeká na zpracování robotem (do minuty), v datech po dalším skenu`}>⏳ čeká na zpracování (#{w.pendingIssue})</span>
+          : w.auto ? (pend && !pend.unwatch ? <span className="tag-manual">⏳ přidává se (#{pend.issue})</span> : <button className="btn-pin gh" disabled={busy} onClick={() => act(addWatch)} title="Zůstane ve sledování i když vypadne z Top 5">{busy ? "…" : "★ Nechat trvale"}</button>)
+          : w.local ? null
+          : (pend && pend.unwatch ? <span className="muted small">⏳ ruší se (#{pend.issue})</span> : <button className="btn-pin" disabled={busy} onClick={() => act(removeWatch)}>{busy ? "…" : "zrušit sledování"}</button>)}
       </div>
     </div>
   );
@@ -73,6 +81,23 @@ export default function Watch({ M }) {
   const [tab, setTab] = useState("best");
   const WATCH = M.watch; const auto = WATCH.filter((w) => w.auto).slice(0, 5), man = WATCH.filter((w) => !w.auto);
   const watchedKeys = useMemo(() => new Set(WATCH.map((w) => w.key)), [WATCH]);
+  const manualKeys = useMemo(() => new Set(man.map((w) => w.key)), [man]);
+  // čekající piny: issue už je založené, robot ho zapíše do watchlist.yaml, v datech se objeví po dalším skenu
+  const pending = usePending();
+  useEffect(() => {
+    const all = loadPending(), keep = all.filter((p) => (p.unwatch ? manualKeys.has(p.key) : !manualKeys.has(p.key)) && (Date.now() - new Date(p.day).getTime()) < 14 * 864e5);
+    if (keep.length !== all.length) savePending(keep);
+  }, [manualKeys]);
+  const pendingCards = pending.filter((p) => !p.unwatch).map((p) => {
+    const [o, d, dep, ret] = p.key.split("|");
+    const cands = M.offers.filter((x) => wkey(x) === p.key);
+    const same = cands.filter((x) => !p.itin || !p.itin.route || x.route === p.itin.route);
+    const cur = (same.length ? same : cands).sort((a, b) => a.price - b.price)[0];
+    const w = { key: p.key, origin: o, destination: d, depart_date: dep, return_date: ret, itin: p.itin, auto: false, pending: true, pendingIssue: p.issue, added: p.day, price_at_add: p.price, name: "Nový pin", nick: p.itin && p.itin.airlines ? p.itin.airlines.join(", ") : "",
+      current: cur ? { ...cur, dep_time: cur.legs && cur.legs[0] ? cur.legs[0].departure.slice(11, 16) : null } : null, same_itinerary: !!same.length, cheapest_any: cands.length ? [...cands].sort((a, b) => a.price - b.price)[0] : null,
+      history: M.queryHistory({ origin: o, destination: d, depart_date: dep, return_date: ret, source: "google" }).map((m) => ({ min: m })), prev_price: null };
+    return <WatchCard key={"pend" + p.key} w={w} M={M} />;
+  });
   const pool = M.fresh.filter((o) => o.score != null);
   const list = useMemo(() => {
     let l = tab === "cheap" ? sortBy(pool, "price") : tab === "fast" ? sortBy(pool, "duration_min") : tab === "direct" ? sortBy(pool.filter((o) => o.stops <= 1), "score") : sortBy(pool, "score");
@@ -96,9 +121,9 @@ export default function Watch({ M }) {
         <div className="wgroup"><h3>Moje tipy</h3><span className="muted">Tip 1 = nejlepší poměr cena/výkon, dál podle ceny · obměňují se automaticky</span></div>
         <div className="cards">{auto.length ? auto.map((w) => <WatchCard key={w.key} w={w} M={M} />) : <div className="empty">Po příštím skenu.</div>}</div>
         <div className="wgroup"><h3>Tvoje piny</h3><span className="muted">ručně vybrané, hlídáme stejný let (aerolinky + trasa)</span></div>
-        <div className="cards">{man.length ? man.map((w) => <WatchCard key={w.key} w={w} M={M} />) : <div className="empty">Zatím žádný. Klikni na „★ Sledovat (GitHub)“ u nabídky a potvrď issue.</div>}</div>
+        <div className="cards">{man.map((w) => <WatchCard key={w.key} w={w} M={M} />)}{pendingCards}{!man.length && !pendingCards.length ? <div className="empty">Zatím žádný. Klikni na „★ Sledovat“ u nabídky v části „Prozkoumat“ nebo na „★ Nechat trvale“ u tipu.</div> : null}</div>
       </>}
-      {pins.length ? <div className="localpins"><div className="panel-head"><h2>Připnuto jen v tomto prohlížeči</h2><span className="muted small">neovlivňuje sken; pro trvalé sledování použij ★ Sledovat (GitHub)</span></div><div className="cards">{localCards}</div></div> : null}
+      {pins.length ? <div className="localpins"><div className="panel-head"><h2>Připnuto jen v tomto prohlížeči</h2><span className="muted small">neovlivňuje sken; pro trvalé sledování použij ★ Sledovat</span></div><div className="cards">{localCards}</div></div> : null}
       <details id="deals" className="explore">
         <summary><strong>Prozkoumat další nabídky</strong> <span className="muted small">· nejlevnější, nejrychlejší, max 1 přestup · odtud přidáš vlastní pin</span></summary>
         <div className="panel-head" style={{ marginTop: 10 }}><div className="tabs" role="tablist">{TABS.map(([k, t]) => <button key={k} className="tab" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{t}</button>)}</div></div>

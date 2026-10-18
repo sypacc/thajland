@@ -59,3 +59,33 @@ export const buildLinks = (o) => {
 const LS_KEY = "thajland.pins";
 export const loadPins = () => { try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch (e) { return []; } };
 export const savePins = (p) => { try { localStorage.setItem(LS_KEY, JSON.stringify(p)); } catch (e) {} };
+
+// ---- GitHub API přímo z prohlížeče (token uložený jen v localStorage) + čekající piny + toasty + motiv
+const TOKEN_KEY = "thajland.ghToken", PENDING_KEY = "thajland.pendingWatch", THEME_KEY = "thajland.theme";
+export const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ""; } catch (e) { return ""; } };
+export const setToken = (t) => { try { t ? localStorage.setItem(TOKEN_KEY, t.trim()) : localStorage.removeItem(TOKEN_KEY); } catch (e) {} };
+export const tokenUrl = () => `https://github.com/settings/personal-access-tokens/new?name=thajland-dashboard&description=Piny+z+dashboardu+(Issues:+Read+and+write)&target_name=${REPO.split("/")[0]}`;
+export async function ghRequest(path, { method = "GET", body } = {}) {
+  const token = getToken();
+  if (!token) throw new Error("no-token");
+  const r = await fetch(`https://api.github.com/repos/${REPO}${path}`, { method, headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  if (r.status === 401) throw new Error("Token je neplatný nebo expiroval (401).");
+  if (r.status === 403 || r.status === 404) throw new Error(`GitHub odmítl požadavek (${r.status}). Token potřebuje právo Issues: Read and write pro ${REPO}.`);
+  if (!r.ok) throw new Error(`GitHub: HTTP ${r.status}`);
+  return r.json();
+}
+export const testToken = () => ghRequest("?per_page=1").then((repo) => repo.full_name || REPO);
+export function issuePayload(o, unwatch = false) {
+  const it = itinOf(o);
+  return {
+    title: `${unwatch ? "unwatch" : "watch"}: ${o.origin}→${o.destination} ${o.depart_date} → ${o.return_date}`,
+    body: unwatch ? "Zrušit sledování tohoto letu (z dashboardu)." : `Sledovat tento let (${(it.airlines || []).join(", ")} · ${it.route} · odlet ${it.dep_time || "?"} · ${czk(o.price)}).\n\n\`\`\`json\n${JSON.stringify({ itin: it, price_at_add: o.price, note: o.note || "" })}\n\`\`\`\n\nZaloženo z dashboardu.`,
+    labels: ["watch"],
+  };
+}
+export const createWatchIssue = (o, unwatch = false) => ghRequest("/issues", { method: "POST", body: issuePayload(o, unwatch) });
+export const loadPending = () => { try { return JSON.parse(localStorage.getItem(PENDING_KEY) || "[]"); } catch (e) { return []; } };
+export const savePending = (p) => { try { localStorage.setItem(PENDING_KEY, JSON.stringify(p)); } catch (e) {} try { window.dispatchEvent(new CustomEvent("thajland:pending", { detail: p })); } catch (e) {} };
+export const toast = (message, kind = "info") => window.dispatchEvent(new CustomEvent("thajland:toast", { detail: { message, kind, id: Date.now() + Math.random() } }));
+export const getTheme = () => { try { return localStorage.getItem(THEME_KEY) || "light"; } catch (e) { return "light"; } };
+export const applyTheme = (t) => { try { localStorage.setItem(THEME_KEY, t); } catch (e) {} if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", t); };

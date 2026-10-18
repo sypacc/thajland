@@ -1,7 +1,8 @@
 import React from "react";
 import { ago, dcz, tm } from "../lib/format.js";
+import { ThemeToggle } from "./Settings.jsx";
 
-export default function Header({ M }) {
+export default function Header({ M, onSettings }) {
   const s = M && M.latest.stats, days = M ? M.days.length : 0;
   return (
     <header className="top">
@@ -23,6 +24,9 @@ export default function Header({ M }) {
         </div>
         <nav className="nav" aria-label="Sekce">
           <a href="#watch">Lety ke sledování</a><a href="#alertsPanel">Hlášení</a><a href="#deals">Prozkoumat</a><a href="#calendarPanel">Kalendář</a><a href="#trend">Vývoj</a><a href="#allPanel">Vše</a><a href="#howto">Jak číst</a>
+          <span className="nav-spacer" />
+          <ThemeToggle />
+          {onSettings ? <button className="nav-btn" onClick={onSettings} title="Nastavení: piny jedním klikem, motiv">⚙️ Nastavení</button> : null}
         </nav>
       </div>
     </header>
