@@ -40,7 +40,7 @@ export default function App() {
   return (
     <>
       <Header M={M} onSettings={() => setSettings(true)} />
-      <main className="wrap">
+      <main className="wrap" id="top">
         <Watch M={M} />
         <Verdict M={M} />
         <Insights M={M} />

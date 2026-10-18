@@ -1,11 +1,14 @@
 // Hlavní sekce: sledované tipy skeneru + tvoje oblíbené, s letovým řádem, vývojem ceny a akcemi.
 import React, { useEffect, useMemo, useState } from "react";
-import { czk, dcz, dshort, routeName, sortBy, wd } from "../lib/format.js";
+import { city, czk, dcz, dshort, durShort, routeName, sortBy, wd } from "../lib/format.js";
 import { loadSeen, resolveFavorite, saveSeen, toggleFavorite, useFavorites } from "../lib/favorites.js";
 import { Badges, Links, FavButton, Sellers, Sparkline, Timeline, scoreWhy } from "./Shared.jsx";
 import FlightCard from "./FlightCard.jsx";
+import Icon from "./Icon.jsx";
 
 export function DealCard({ o, i, M, label }) {
+  const lays = o.layovers || [];
+  const kind = (m) => m < 60 ? "short" : m <= 180 ? "ok" : m <= 300 ? "mid" : "long";
   return (
     <div className={"card" + (i === 0 ? " rank1" : "")}>
       <div className="head">
@@ -14,12 +17,15 @@ export function DealCard({ o, i, M, label }) {
       </div>
       <div className="route">{routeName(o._rk)}<span className="muted"> · {o.airlines.join(", ") || "–"}</span></div>
       <div className="dates">{wd(o.depart_date)} {dcz(o.depart_date)} → {wd(o.return_date)} {dcz(o.return_date)} · {o.nights} dní</div>
-      <Timeline o={o} detailed />
+      <Timeline o={o} />
+      {lays.length ? <div className="lays">{lays.map((l, j) => <span key={j} className={"lay-pill " + kind(l.minutes)}><i />{durShort(l.minutes)} {city(l.airport)}</span>)}</div> : <div className="lays"><span className="lay-pill ok"><i />přímý let</span></div>}
       <Badges o={o} latestDay={M.latest.day} />
       <Sellers o={o} />
-      <div className="why">{scoreWhy(o)}{M.days.length >= 2 ? <> · vývoj termínu: <Sparkline values={M.queryHistory(o)} w={80} h={20} /></> : null}</div>
-      <Links o={o} />
-      <div className="links"><FavButton o={o} /></div>
+      <div className="fc-actions">
+        {o.links && o.links.google ? <a className="btn primary sm" href={o.links.google} target="_blank" rel="noopener" title={scoreWhy(o)}>Koupit <Icon name="ext" size={13} /></a> : null}
+        <FavButton o={o} compact />
+        <details className="more-links"><summary className="btn ghost sm">vyhledávače</summary><Links o={o} primary={false} /></details>
+      </div>
     </div>
   );
 }
@@ -85,14 +91,14 @@ export default function Watch({ M }) {
     <section id="watch" className="panel watch main">
       <div className="panel-head">
         <div>
-          <h2><span className="ico">★</span> Sledované a oblíbené</h2>
-          <p className="intro">Hlavní přehled. <strong>Tipy</strong> vybírá skener každý den sám (nejlepší poměr cena/výkon), <strong>oblíbené</strong> si ukládáš hvězdičkou – hned, bez přihlašování. U každého letu vidíš odlet, přílet, kde a jak dlouho je přestup a jak se hýbe cena.</p>
+          <h2>Sledované a oblíbené</h2>
+          <p className="intro"><strong>Tipy</strong> vybírá skener každý den sám podle poměru cena/výkon, <strong>oblíbené</strong> si ukládáš hvězdičkou, hned a bez přihlašování. U každého letu: odlet, přílet, přestup a vývoj ceny.</p>
         </div>
         <div className="fc-controls">
           <div className="seg" role="tablist">
             <button role="tab" aria-selected={view === "all"} onClick={() => setView("all")}>Vše <span className="cnt">{all.length}</span></button>
-            <button role="tab" aria-selected={view === "tips"} onClick={() => setView("tips")}>Tipy skeneru <span className="cnt">{tips.length}</span></button>
-            <button role="tab" aria-selected={view === "fav"} onClick={() => setView("fav")}>★ Oblíbené <span className="cnt">{favorites.length}</span></button>
+            <button role="tab" aria-selected={view === "tips"} onClick={() => setView("tips")}>Tipy <span className="cnt">{tips.length}</span></button>
+            <button role="tab" aria-selected={view === "fav"} onClick={() => setView("fav")}>Oblíbené <span className="cnt">{favorites.length}</span></button>
           </div>
           <label className="sortsel">Řadit <select value={sort} onChange={(e) => setSort(e.target.value)}>{SORTS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></label>
         </div>
@@ -100,20 +106,20 @@ export default function Watch({ M }) {
 
       {changes.length && !hideChanges ? (
         <div className="changes">
-          <div className="changes-head"><strong>Od tvé poslední návštěvy</strong> <span className="muted small">(stav k {dcz(changes[0].day)})</span><button className="btn-more" onClick={() => setHideChanges(true)}>skrýt</button></div>
+          <div className="changes-head"><strong>Od tvé poslední návštěvy</strong> <span className="muted small">(stav k {dcz(changes[0].day)})</span><button className="btn ghost sm" onClick={() => setHideChanges(true)}>skrýt</button></div>
           <ul>{changes.map((c) => <li key={c.w.favKey}>{c.kind === "gone" ? <span className="chip up">zmizel z nabídky</span> : c.kind === "down" ? <span className="chip down">▼ {czk(-c.d)}</span> : <span className="chip up">▲ {czk(c.d)}</span>} {routeName(`${c.w.origin}→${c.w.destination}`)} · {dshort(c.w.depart_date)}–{dshort(c.w.return_date)} · {(c.w.itin && c.w.itin.airlines || []).join(", ")}{c.kind !== "gone" ? <span className="muted"> · teď {czk(c.w.current.price)}</span> : <span className="muted"> · naposledy {czk(c.prev)}</span>}</li>)}</ul>
         </div>
       ) : null}
 
       {view !== "tips" && !favorites.length ? (
         <div className="fav-empty">
-          <div className="big">☆</div>
+          <div className="big"><Icon name="star" size={28} /></div>
           <div>
             <strong>Zatím nemáš žádný oblíbený let.</strong>
             <div className="small muted">Klikni na „☆ Do oblíbených“ u kteréhokoliv tipu nebo nabídky. Uloží se okamžitě v tomto prohlížeči a hned uvidíš, jak se mu mění cena.</div>
             <div className="links" style={{ marginTop: 8 }}>
-              {bestTip ? <button className="btn-fav" onClick={addBest}>☆ Přidat Tip 1 ({czk(bestTip.current.price)})</button> : null}
-              <a className="search" href="#deals" onClick={() => { const d = document.getElementById("deals"); if (d) d.open = true; }}>prozkoumat další nabídky</a>
+              {bestTip ? <button className="btn fav" onClick={addBest}><Icon name="star" size={14} /> Přidat Tip 1 · {czk(bestTip.current.price)}</button> : null}
+              <a className="btn ghost" href="#deals" onClick={() => { const d = document.getElementById("deals"); if (d) d.open = true; }}>prozkoumat další nabídky</a>
             </div>
           </div>
         </div>

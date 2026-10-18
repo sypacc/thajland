@@ -2,6 +2,7 @@
 import React from "react";
 import { buildLinks, city, czk, dshort, dur, durShort, kcs, LINK_NAMES, tm, toast } from "../lib/format.js";
 import { isFavorite, toggleFavorite, useFavorites } from "../lib/favorites.js";
+import Icon from "./Icon.jsx";
 
 export function Badges({ o, latestDay }) {
   const b = [];
@@ -47,8 +48,8 @@ export function Timeline({ o, detailed = false }) {
         <ul className="layover-list">
           {o.legs.map((l, i) => (
             <React.Fragment key={i}>
-              <li><span className="seg">✈ {city(l.from_airport)} {tm(l.departure)} → {city(l.to_airport)} {tm(l.arrival)}</span><span className="muted"> · {dur(l.duration_min)}{l.plane ? " · " + l.plane : ""}</span></li>
-              {lays[i] ? <li className={"lay-row" + (lays[i].minutes > 300 ? " long" : lays[i].minutes < 60 ? " short" : "")}><strong>⏱ přestup {city(lays[i].airport)} ({lays[i].airport})</strong> · {dur(lays[i].minutes)}{lays[i].minutes > 300 ? " · dlouhý, zvaž odpočinek/město" : lays[i].minutes < 60 ? " · těsný, riziko nestihnutí" : " · pohodlný"}</li> : null}
+              <li><span className="segm">{city(l.from_airport)} {tm(l.departure)} → {city(l.to_airport)} {tm(l.arrival)}</span><span className="muted"> · {dur(l.duration_min)}{l.plane ? " · " + l.plane : ""}</span></li>
+              {lays[i] ? <li className={"lay-row" + (lays[i].minutes > 300 ? " long" : lays[i].minutes < 60 ? " short" : "")}><strong>přestup {city(lays[i].airport)} ({lays[i].airport})</strong> · {dur(lays[i].minutes)}{lays[i].minutes > 300 ? " · dlouhý, zvaž odpočinek/město" : lays[i].minutes < 60 ? " · těsný, riziko nestihnutí" : " · pohodlný"}</li> : null}
             </React.Fragment>
           ))}
         </ul>
@@ -77,7 +78,7 @@ export function Links({ o, primary = true }) {
   const links = o.links && o.links.kiwi ? o.links : buildLinks(o);
   return (
     <div className="links">
-      {Object.entries(links).map(([k, u]) => u ? <a key={k} href={u} target="_blank" rel="noopener" className={k === "google" ? (primary ? "primary" : undefined) : "search"} title={k === "google" ? "Přesně tento dotaz na Google Flights – tam vybereš zpáteční let a prodejce" : `Otevře vyhledávání na ${LINK_NAMES[k] || k} s předvyplněným termínem (jejich ceny automaticky číst nejde)`}>{(k === "google" ? "Koupit přes " : "hledat na ") + (LINK_NAMES[k] || k)}</a> : null)}
+      {Object.entries(links).filter(([k]) => primary || k !== "google").map(([k, u]) => u ? <a key={k} href={u} target="_blank" rel="noopener" className={k === "google" ? (primary ? "primary" : undefined) : "search"} title={k === "google" ? "Přesně tento dotaz na Google Flights – tam vybereš zpáteční let a prodejce" : `Otevře vyhledávání na ${LINK_NAMES[k] || k} s předvyplněným termínem (jejich ceny automaticky číst nejde)`}>{(k === "google" ? "Koupit na " : "") + (LINK_NAMES[k] || k)}</a> : null)}
     </div>
   );
 }
@@ -89,7 +90,7 @@ export function FavButton({ o, compact = false }) {
     const added = toggleFavorite(o);
     toast(added ? "★ Přidáno do oblíbených – najdeš ho nahoře v „Sledované a oblíbené“." : "Odebráno z oblíbených.", added ? "good" : "info");
   };
-  return <button className={"btn-fav" + (on ? " on" : "") + (compact ? " compact" : "")} onClick={click} aria-pressed={on} title={on ? "Odebrat z oblíbených" : "Uložit do oblíbených: hned, bez přihlašování, zůstane v tomto prohlížeči"}>{on ? "★ V oblíbených" : "☆ Do oblíbených"}</button>;
+  return <button className={"btn fav" + (on ? " on" : "") + (compact ? " sm" : "")} onClick={click} aria-pressed={on} title={on ? "Odebrat z oblíbených" : "Uložit do oblíbených: hned, bez přihlašování, zůstane v tomto prohlížeči"}><Icon name="star" size={14} fill={on} /> {on ? "V oblíbených" : "Do oblíbených"}</button>;
 }
 // zpětná kompatibilita
 export const PinButtons = ({ o }) => <div className="links"><FavButton o={o} /></div>;

@@ -15,7 +15,7 @@ function HistoryChart({ M }) {
     const chart = new Chart(ref.current, { type: "line", data: { labels: days.map((d) => dshort(d.day)), datasets: routes.map((r) => ({ label: routeName(r), data: days.map((d) => (d.routes[r.replace("→", "-")] || {}).min ?? null), borderColor: cssVar(`--s${(routeOrder.indexOf(r) % 6) + 1}`), backgroundColor: cssVar(`--s${(routeOrder.indexOf(r) % 6) + 1}`) })) }, options: {
       responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: "index", intersect: false },
       plugins: { legend: { display: false }, tooltip: { callbacks: { title: (it) => "sken " + it[0].label, label: (c) => ` ${c.dataset.label}: ${czk(c.parsed.y)}` } } },
-      scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true } }, y: { ticks: { callback: (v) => Math.round(v / 1000) + " tis." }, grid: { color: cssVar("--grid") } } },
+      scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true } }, y: { ticks: { maxTicksLimit: 7, callback: (v) => (v / 1000).toFixed(1).replace(".", ",") + " tis." }, grid: { color: cssVar("--grid") } } },
       elements: { line: { borderWidth: 2, tension: .2, spanGaps: true }, point: { radius: 3, hoverRadius: 6, hitRadius: 10 } } } });
     return () => chart.destroy();
   }, [M]);
@@ -32,7 +32,7 @@ export default function Trend({ M }) {
   const routes = routeOrder.filter((r) => days.some((d) => d.routes[r.replace("→", "-")]));
   return (
     <section className="panel" id="trend">
-      <div className="panel-head"><h2><span className="ico">📈</span> Vývoj ceny v čase</h2><span className="muted small">{days.length ? `${days.length} měření · ${dshort(days[0].day)} – ${dshort(last.day)}` : ""}</span></div>
+      <div className="panel-head"><h2>Vývoj ceny v čase</h2><span className="muted small">{days.length ? `${days.length} měření · ${dshort(days[0].day)} – ${dshort(last.day)}` : ""}</span></div>
       <div className="table-wrap">
         <table id="overview">
           <thead><tr><th>Trasa</th><th>Dnes</th><th>vs. minule</th><th>vs. 7 dní</th><th>vs. 30 dní</th><th>Minimum</th><th>Maximum</th><th>Vývoj</th><th>Verdikt</th></tr></thead>

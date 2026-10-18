@@ -5,7 +5,7 @@ export default function Alerts({ M }) {
   const A = M.alerts, today = M.latest.day, todays = A.filter((a) => a.day === today);
   return (
     <section id="alertsPanel" className="panel" aria-label="Hlášení">
-      <div className="panel-head"><h2><span className="ico">🔔</span> Hlášení</h2><span className="muted small">{A.length ? `${todays.length} dnes · ${A.length} celkem` : ""}</span></div>
+      <div className="panel-head"><h2>Hlášení</h2><span className="muted small">{A.length ? `${todays.length} dnes · ${A.length} celkem` : ""}</span></div>
       {!A.length ? <div className="alerts"><div className="empty">Zatím žádné hlášení. Přijde, jakmile cena spadne pod {czk((M.cfg.alerts || {}).target_price || 15000)}/os, prudce klesne od minula, bude výrazně pod historií termínu, nebo se změní cena sledovaného letu.</div></div> : (
         <div className="alerts">
           {A.slice(0, 10).map((a, i) => (

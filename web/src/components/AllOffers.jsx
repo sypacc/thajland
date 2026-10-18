@@ -52,7 +52,7 @@ export default function AllOffers({ M }) {
           </tbody>
         </table>
       </div>
-      {rows.length > shown ? <button className="btn" onClick={() => setShown(shown + 100)}>Zobrazit další</button> : null}
+      {rows.length > shown ? <button className="btn ghost" onClick={() => setShown(shown + 100)}>Zobrazit další</button> : null}
     </details>
   );
 }

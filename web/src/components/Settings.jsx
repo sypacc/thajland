@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import Icon from "./Icon.jsx";
 import { applyTheme, getTheme, getToken, REPO, setToken, testToken, toast, tokenUrl } from "../lib/format.js";
 
 export function Toasts() {
@@ -14,8 +15,9 @@ export function ThemeToggle() {
   const [theme, setTheme] = useState(getTheme);
   useEffect(() => { applyTheme(theme); }, [theme]);
   const next = { light: "dark", dark: "auto", auto: "light" }[theme];
-  const label = { light: "☀️ světlý", dark: "🌙 tmavý", auto: "🖥 podle systému" }[theme];
-  return <button className="nav-btn" onClick={() => setTheme(next)} title="Přepnout motiv">{label}</button>;
+  const label = { light: "Světlý motiv", dark: "Tmavý motiv", auto: "Motiv podle systému" }[theme];
+  const icon = { light: "sun", dark: "moon", auto: "auto" }[theme];
+  return <button className="icon-btn" onClick={() => setTheme(next)} title={label + " · kliknutím přepneš"} aria-label={label}><Icon name={icon} size={17} /></button>;
 }
 
 export default function Settings({ open, onClose }) {
@@ -32,7 +34,7 @@ export default function Settings({ open, onClose }) {
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head"><h2>Nastavení</h2><button className="btn-pin" onClick={onClose}>zavřít</button></div>
+        <div className="panel-head"><h2>Nastavení</h2><button className="icon-btn" onClick={onClose} aria-label="Zavřít"><Icon name="x" size={16} /></button></div>
         <h3>Oblíbené</h3>
         <p className="small">Hvězdička ukládá oblíbené lety <strong>okamžitě a bez přihlašování</strong> do tohoto prohlížeče. Historii ceny mají, protože skener měří všechny termíny každý den.</p>
         <h3>Volitelné: synchronizace do skeneru</h3>
@@ -43,11 +45,11 @@ export default function Settings({ open, onClose }) {
         </ol>
         <div className="filters">
           <label style={{ flex: 1 }}>GitHub token<input type="password" value={token} onChange={(e) => setTok(e.target.value)} placeholder="github_pat_…" autoComplete="off" /></label>
-          <button className="btn-pin gh" onClick={save}>Uložit a ověřit</button>
+          <button className="btn primary" onClick={save}>Uložit a ověřit</button>
         </div>
         {status ? <p className="small">{status}</p> : null}
         <h3>Motiv</h3>
-        <p className="small">Výchozí je světlý. <ThemeToggle /></p>
+        <p className="small">Výchozí je světlý; přepínač je v hlavičce. <ThemeToggle /></p>
       </div>
     </div>
   );

@@ -24,7 +24,7 @@ export default function Calendar({ M }) {
   const detail = sel ? (() => { const [r, d] = sel.split("|"); const dayOffers = offers.filter((o) => o._rk === r && o.depart_date === d && o.score != null); const list = sortBy(dayOffers, "score").slice(0, 3); const perLen = cfg.trip_lengths.map((n) => { const xs = dayOffers.filter((o) => o.nights === n); return `${n} dní: ${xs.length ? czk(Math.min(...xs.map((o) => o.price))) : "–"}`; }).join(" · "); return { r, d, list, perLen }; })() : null;
   return (
     <section className="panel" id="calendarPanel">
-      <div className="panel-head"><h2><span className="ico">📅</span> Kalendář cen</h2><span className="muted small">nejnižší cena/os pro den odletu · klikni na políčko</span></div>
+      <div className="panel-head"><h2>Kalendář cen</h2><span className="muted small">nejnižší cena/os pro den odletu · klikni na políčko</span></div>
       <div className="calendar">
         {model.months.map((ym) => {
           const dates = model.planDates.filter((d) => d.startsWith(ym));
@@ -51,7 +51,7 @@ export default function Calendar({ M }) {
           );
         })}
       </div>
-      <div className="legend small">Cena v tisících Kč/os (nejlevnější ze všech délek pobytu): nejlevnější<i className="ramp" />nejdražší<span style={{ "--c": "transparent", marginLeft: 14 }}>→ = mimo prodejní okno ({HORIZON_DAYS} dní dopředu), otevře se postupně</span><span style={{ "--c": "transparent" }}>· = v okně, ale Google nenabízí spojení</span><span style={{ "--c": "transparent" }}>★ = nejnižší cena skenu</span><span style={{ "--c": "var(--good)" }}>zelený rámeček = nově v prodeji</span><span style={{ "--c": "transparent" }}>bledé = starší data</span></div>
+      <div className="legend small">Cena v tisících Kč/os (nejlevnější ze všech délek pobytu): nejlevnější<i className="ramp" />nejdražší<span style={{ "--c": "transparent", marginLeft: 14 }}>→ = mimo prodejní okno ({HORIZON_DAYS} dní dopředu), otevře se postupně</span><span style={{ "--c": "transparent" }}>· = v okně, ale Google nenabízí spojení</span><span style={{ "--c": "transparent" }}>tečka v rohu = nejnižší cena skenu</span><span style={{ "--c": "var(--good)" }}>zelený rámeček = nově v prodeji</span><span style={{ "--c": "transparent" }}>bledé = starší data</span></div>
       {detail ? <div className="cal-detail"><div className="panel-head"><h2>{routeName(detail.r)} · odlet {wd(detail.d)} {dcz(detail.d)}</h2><span className="muted small">nejnižší cena podle délky pobytu: {detail.perLen}</span></div><div className="cards">{detail.list.map((o, i) => <DealCard key={o.id} o={o} i={i} M={M} watchedKeys={watchedKeys} />)}</div></div> : null}
     </section>
   );
