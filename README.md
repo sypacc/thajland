@@ -34,15 +34,17 @@ Hlavní pracovní režim: jedna sekce, v ní **Tip 1–5** (automatický výběr
 a pod nimi **tvoje piny**. Každý let má jednoduché jméno („Tip 2 · Qatar přes Dauhá“, „Můj pin 1 · Scoot přes Singapur“),
 které se používá i v hlášeních. Ostatní nabídky jsou ve sbalené části „Prozkoumat další nabídky“.
 
-- **Přidání z dashboardu:** tlačítko **★ Sledovat** u nabídky (nebo **★ Nechat trvale** u tipu).
-  Stránka je statická, takže pin zapisuje přes GitHub issue
-  (`watch: PRG→BKK 2027-08-26 → 2027-09-09` + itinerář v těle); workflow `watch.yml` ho do minuty
-  zapíše do `watchlist.yaml`, commitne a issue zavře. Zrušení: `unwatch: …` / tlačítko „zrušit sledování“.
-  - **Jedním klikem:** v ⚙️ Nastavení na dashboardu ulož fine-grained GitHub token
-    (Repository access: jen tento repozitář, Permissions: Issues → Read and write). Token zůstává
-    jen v localStorage prohlížeče a volá se s ním pouze `api.github.com`. Pin se pak založí přímo
-    ze stránky a do dalšího skenu je vidět jako „čeká na zpracování (#N)“.
-  - **Bez tokenu:** otevře se předvyplněný GitHub formulář, stačí potvrdit „Submit new issue“.
+- **Oblíbené z dashboardu:** tlačítko **☆ Do oblíbených** u tipu nebo nabídky uloží let okamžitě
+  do prohlížeče (localStorage), bez přihlašování. Sekce „Sledované a oblíbené“ je hlavní část stránky:
+  u každého letu je odlet, přílet, jednotlivé úseky s časy, místo a délka přestupu, kde koupit, vývoj
+  ceny a při další návštěvě přehled, co se s oblíbenými od minula stalo. Historii mají, protože skener
+  měří všechny termíny každý den.
+  - **Volitelná synchronizace do skeneru** (priorita ve skenu + hlášení e‑mailem/Telegramem/issue,
+    oblíbené i na jiném zařízení): v ⚙️ Nastavení ulož fine-grained GitHub token (Repository access:
+    jen tento repozitář, Permissions: Issues → Read and write). Každé přidání/odebrání pak potichu založí
+    issue `watch: …` / `unwatch: …`, které workflow `watch.yml` zapíše do `watchlist.yaml`. Token zůstává
+    jen v prohlížeči a volá se s ním pouze `api.github.com`.
+  - **Ručně:** issue s titulkem `watch: PRG→BKK 2027-08-26 → 2027-09-09` (volitelně JSON s itinerářem v těle).
 - **Automaticky:** po každém skenu se do sledování přidá 5 nejlepších dealů (různé itineráře, max. 2 na trasu);
   když vypadnou z top 5 na víc než 10 dní, zase zmizí. Nastavení v `watchlist.yaml` → `auto`.
 - **Co sledování dělá:** dotazy sledovaných letů jdou ve skenu první a vždy s plným opakováním; hlídá se cena

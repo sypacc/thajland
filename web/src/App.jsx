@@ -41,8 +41,8 @@ export default function App() {
     <>
       <Header M={M} onSettings={() => setSettings(true)} />
       <main className="wrap">
-        <Verdict M={M} />
         <Watch M={M} />
+        <Verdict M={M} />
         <Insights M={M} />
         <Alerts M={M} />
         <Calendar M={M} />

@@ -1,7 +1,7 @@
 // Sdílené kousky: badge, časová osa itineráře s přestupy, prodejci, sparkline, odkazy, piny.
-import React, { useState } from "react";
-import { buildLinks, city, czk, dshort, dur, durShort, itinOf, kcs, LINK_NAMES, tm, wkey } from "../lib/format.js";
-import { addWatch, usePending } from "../lib/watchActions.js";
+import React from "react";
+import { buildLinks, city, czk, dshort, dur, durShort, kcs, LINK_NAMES, tm, toast } from "../lib/format.js";
+import { isFavorite, toggleFavorite, useFavorites } from "../lib/favorites.js";
 
 export function Badges({ o, latestDay }) {
   const b = [];
@@ -82,23 +82,17 @@ export function Links({ o, primary = true }) {
   );
 }
 
-export function PinButtons({ o, pins, setPins, watchedKeys }) {
-  const pending = usePending();
-  const key = wkey(o);
-  const pinned = pins.some((p) => p.key === key && (!p.itin || !p.itin.route || p.itin.route === o.route));
-  const pend = pending.find((p) => p.key === key && !p.unwatch);
-  const [busy, setBusy] = useState(false);
-  const toggle = () => setPins(pinned ? pins.filter((p) => !(p.key === key && (!p.itin || p.itin.route === o.route))) : [...pins, { key, itin: itinOf(o), price_at_pin: o.price, day: new Date().toISOString().slice(0, 10) }]);
-  const watch = async () => { setBusy(true); try { await addWatch(o); } finally { setBusy(false); } };
-  return (
-    <div className="links">
-      {watchedKeys.has(key) ? <span className="tag-manual">✓ sledováno</span>
-        : pend ? <span className="tag-manual" title={`Issue #${pend.issue} čeká na zpracování robotem`}>⏳ přidává se (#{pend.issue})</span>
-        : <button className="btn-pin gh" disabled={busy} onClick={watch} title="Trvalé sledování: let dostane prioritu ve skenu, vlastní historii a hlášení o změně ceny.">{busy ? "…" : "★ Sledovat"}</button>}
-      <button className={"btn-pin" + (pinned ? " on" : "")} onClick={toggle} title="Rychlý pin jen v tomto prohlížeči (neovlivní sken)">{pinned ? "✓ připnuto zde" : "připnout jen zde"}</button>
-    </div>
-  );
+export function FavButton({ o, compact = false }) {
+  const favs = useFavorites();
+  const on = isFavorite(favs, o);
+  const click = () => {
+    const added = toggleFavorite(o);
+    toast(added ? "★ Přidáno do oblíbených – najdeš ho nahoře v „Sledované a oblíbené“." : "Odebráno z oblíbených.", added ? "good" : "info");
+  };
+  return <button className={"btn-fav" + (on ? " on" : "") + (compact ? " compact" : "")} onClick={click} aria-pressed={on} title={on ? "Odebrat z oblíbených" : "Uložit do oblíbených: hned, bez přihlašování, zůstane v tomto prohlížeči"}>{on ? "★ V oblíbených" : "☆ Do oblíbených"}</button>;
 }
+// zpětná kompatibilita
+export const PinButtons = ({ o }) => <div className="links"><FavButton o={o} /></div>;
 
 export function scoreWhy(o) {
   const b = o.score_breakdown || {}; const parts = [];

@@ -1,60 +1,11 @@
+// Hlavní sekce: sledované tipy skeneru + tvoje oblíbené, s letovým řádem, vývojem ceny a akcemi.
 import React, { useEffect, useMemo, useState } from "react";
-import { buildLinks, city, czk, dcz, dshort, durShort, loadPending, loadPins, routeName, savePending, savePins, sortBy, wd, wkey, LINK_NAMES } from "../lib/format.js";
-import { addWatch, removeWatch, usePending } from "../lib/watchActions.js";
-import { Badges, Links, PinButtons, Sellers, Sparkline, Timeline, scoreWhy } from "./Shared.jsx";
+import { czk, dcz, dshort, routeName, sortBy, wd } from "../lib/format.js";
+import { loadSeen, resolveFavorite, saveSeen, toggleFavorite, useFavorites } from "../lib/favorites.js";
+import { Badges, Links, FavButton, Sellers, Sparkline, Timeline, scoreWhy } from "./Shared.jsx";
+import FlightCard from "./FlightCard.jsx";
 
-function Delta({ cur, prev, label }) {
-  if (cur == null || prev == null) return <span className="muted">{label}: –</span>;
-  const d = cur - prev; const cls = d < 0 ? "trend-down" : d > 0 ? "trend-up" : "";
-  return <span className={cls}>{label}: {d > 0 ? "+" : ""}{czk(d)} ({d > 0 ? "+" : ""}{(d / prev * 100).toFixed(0)} %)</span>;
-}
-
-export function WatchCard({ w, M, extra }) {
-  const pending = usePending();
-  const [busy, setBusy] = useState(false);
-  const act = async (fn) => { setBusy(true); try { await fn(o); } finally { setBusy(false); } };
-  const pend = pending.find((p) => p.key === w.key);
-  const cur = w.current; const it = w.itin || {};
-  const state = !cur ? "missing" : (w.prev_price != null && cur.price < w.prev_price) ? "down" : (w.prev_price != null && cur.price > w.prev_price) ? "up" : "";
-  const nick = w.nick || ((cur && cur.airlines) || it.airlines || []).join(", ");
-  const d = cur && w.prev_price != null ? cur.price - w.prev_price : null;
-  const o = { origin: w.origin, destination: w.destination, depart_date: w.depart_date, return_date: w.return_date, price: cur ? cur.price : (w.prev_price || 0), airlines: (cur && cur.airlines) || it.airlines || [], route: (cur && cur.route) || it.route, legs: (cur && cur.legs) || [], layovers: (cur && cur.layovers) || [], duration_min: cur && cur.duration_min, links: { google: cur && cur.links && cur.links.google } };
-  const bl = buildLinks(o);
-  return (
-    <div className={`wcard ${w.auto ? "auto" : "manual"} ${state}`}>
-      <div>
-        <div className="wname">{w.name || (w.auto ? "Tip" : "Můj pin")} · <span className="nick">{nick}</span></div>
-        <div className="wtitle">{routeName(`${w.origin}→${w.destination}`)}<span className="muted"> · {wd(w.depart_date)} {dcz(w.depart_date)} → {dcz(w.return_date)}</span></div>
-        <div className="wsub">{o.route || ""}{(it.dep_time || (cur && cur.dep_time)) ? " · odlet " + (it.dep_time || cur.dep_time) : ""}{cur && cur.duration_min ? " · tam " + durShort(cur.duration_min) : ""}{cur && cur.stops != null ? " · " + (cur.stops === 0 ? "přímý" : cur.stops + "× přestup") : ""}{w.note ? ` · „${w.note}“` : ""}</div>
-      </div>
-      {cur ? (
-        <div><div className="wprice">{czk(cur.price)}</div><div className="wdelta">{d == null ? <span className="chip flat">první měření</span> : d < 0 ? <span className="chip down">▼ {czk(-d)} od minula</span> : d > 0 ? <span className="chip up">▲ {czk(d)} od minula</span> : <span className="chip flat">beze změny</span>}</div></div>
-      ) : (
-        <div><div className="wprice muted">–</div><div className="wdelta bad">{w.prev_price ? `dnes není v nabídce (naposledy ${czk(w.prev_price)} ${w.prev_day ? dshort(w.prev_day) : ""})` : "zatím bez nabídky"}</div></div>
-      )}
-      {cur && cur.legs && cur.legs.length ? <div className="wfull"><Timeline o={o} detailed /></div> : null}
-      <div className="wfoot">
-        <Sparkline values={(w.history || []).map((h) => h.itin != null ? h.itin : h.min)} w={160} h={32} />
-        {w.price_at_add != null && cur ? <Delta cur={cur.price} prev={w.price_at_add} label={`od přidání (${dshort(w.added || M.latest.day)})`} /> : null}
-        {w.min_seen != null ? <span>min {czk(w.min_seen)} · max {czk(w.max_seen)} · {(w.history || []).length} měření</span> : null}
-        {cur && !w.same_itinerary && it.route ? <span className="warn">stejný let dnes nenalezen, ukazuji nejlevnější na termín</span> : null}
-        {cur && w.cheapest_any && w.cheapest_any.price < cur.price ? <span>nejlevnější na termín: {czk(w.cheapest_any.price)} ({(w.cheapest_any.airlines || []).join(", ")})</span> : null}
-      </div>
-      {cur ? <div className="wfull"><Sellers o={cur} />{cur.price_insight && cur.price_insight.level ? <div className="badges"><span className={"badge " + (cur.price_insight.level === "nízká" ? "good" : cur.price_insight.level === "vysoká" ? "bad" : "")}>Google: {cur.price_insight.level} cena{cur.price_insight.low ? ` (obvykle ${(cur.price_insight.low / 1000).toFixed(1)}–${(cur.price_insight.high / 1000).toFixed(1)} tis.)` : ""}</span></div> : null}</div> : null}
-      <div className="links">
-        {bl.google ? <a className="primary" href={bl.google} target="_blank" rel="noopener" title="Přesně tento dotaz na Google Flights – vybereš zpáteční let a prodejce">Koupit přes Google Flights</a> : null}
-        {["kiwi", "skyscanner", "kayak"].map((k) => <a key={k} className="search" href={bl[k]} target="_blank" rel="noopener" title="Otevře vyhledávání s předvyplněným termínem; jejich ceny automaticky číst nejde">hledat na {LINK_NAMES[k]}</a>)}
-        {extra}
-        {w.pending ? <span className="tag-manual" title={`Issue #${w.pendingIssue} čeká na zpracování robotem (do minuty), v datech po dalším skenu`}>⏳ čeká na zpracování (#{w.pendingIssue})</span>
-          : w.auto ? (pend && !pend.unwatch ? <span className="tag-manual">⏳ přidává se (#{pend.issue})</span> : <button className="btn-pin gh" disabled={busy} onClick={() => act(addWatch)} title="Zůstane ve sledování i když vypadne z Top 5">{busy ? "…" : "★ Nechat trvale"}</button>)
-          : w.local ? null
-          : (pend && pend.unwatch ? <span className="muted small">⏳ ruší se (#{pend.issue})</span> : <button className="btn-pin" disabled={busy} onClick={() => act(removeWatch)}>{busy ? "…" : "zrušit sledování"}</button>)}
-      </div>
-    </div>
-  );
-}
-
-export function DealCard({ o, i, M, pins, setPins, watchedKeys, label }) {
+export function DealCard({ o, i, M, label }) {
   return (
     <div className={"card" + (i === 0 ? " rank1" : "")}>
       <div className="head">
@@ -63,72 +14,121 @@ export function DealCard({ o, i, M, pins, setPins, watchedKeys, label }) {
       </div>
       <div className="route">{routeName(o._rk)}<span className="muted"> · {o.airlines.join(", ") || "–"}</span></div>
       <div className="dates">{wd(o.depart_date)} {dcz(o.depart_date)} → {wd(o.return_date)} {dcz(o.return_date)} · {o.nights} dní</div>
-      <Timeline o={o} />
+      <Timeline o={o} detailed />
       <Badges o={o} latestDay={M.latest.day} />
       <Sellers o={o} />
       <div className="why">{scoreWhy(o)}{M.days.length >= 2 ? <> · vývoj termínu: <Sparkline values={M.queryHistory(o)} w={80} h={20} /></> : null}</div>
       <Links o={o} />
-      <PinButtons o={o} pins={pins} setPins={setPins} watchedKeys={watchedKeys} />
+      <div className="links"><FavButton o={o} /></div>
     </div>
   );
 }
 
 const TABS = [["best", "Nejlepší poměr", "Skóre = cena + penalizace za dlouhou cestu, přestupy a horší aerolinky. Čím nižší, tím lepší."], ["cheap", "Nejlevnější", "Čistě podle ceny za osobu, bez ohledu na délku cesty a přestupy."], ["fast", "Nejrychlejší", "Nejkratší cesta tam. Cena je druhotná."], ["direct", "Přímé / 1 přestup", "Jen přímé lety a lety s jedním přestupem, řazené podle skóre."]];
+const SORTS = [["rec", "doporučené"], ["price", "nejlevnější"], ["dur", "nejkratší cesta"], ["dep", "nejbližší odlet"], ["delta", "největší zlevnění"]];
+
+function useChanges(items, M) {
+  // co se stalo s oblíbenými od poslední návštěvy (pamatujeme si naposledy viděnou cenu)
+  const [snap] = useState(() => loadSeen());
+  const changes = useMemo(() => items.filter((w) => w.favorite).map((w) => {
+    const prev = snap[w.favKey]; const cur = w.current ? w.current.price : null;
+    if (!prev) return null;
+    if (cur == null && prev.price != null) return { w, kind: "gone", prev: prev.price, day: prev.day };
+    if (cur != null && prev.price != null && cur !== prev.price) return { w, kind: cur < prev.price ? "down" : "up", d: cur - prev.price, day: prev.day };
+    return null;
+  }).filter(Boolean), [items, snap]);
+  useEffect(() => {
+    const next = { ...snap };
+    items.filter((w) => w.favorite).forEach((w) => { next[w.favKey] = { price: w.current ? w.current.price : null, day: M.latest.day }; });
+    saveSeen(next);
+  }, [items, M.latest.day]); // eslint-disable-line react-hooks/exhaustive-deps
+  return changes;
+}
 
 export default function Watch({ M }) {
-  const [pins, setPinsState] = useState(loadPins);
-  const setPins = (p) => { setPinsState(p); savePins(p); };
+  const favs = useFavorites();
+  const [view, setView] = useState("all");
+  const [sort, setSort] = useState("rec");
   const [tab, setTab] = useState("best");
-  const WATCH = M.watch; const auto = WATCH.filter((w) => w.auto).slice(0, 5), man = WATCH.filter((w) => !w.auto);
-  const watchedKeys = useMemo(() => new Set(WATCH.map((w) => w.key)), [WATCH]);
-  const manualKeys = useMemo(() => new Set(man.map((w) => w.key)), [man]);
-  // čekající piny: issue už je založené, robot ho zapíše do watchlist.yaml, v datech se objeví po dalším skenu
-  const pending = usePending();
-  useEffect(() => {
-    const all = loadPending(), keep = all.filter((p) => (p.unwatch ? manualKeys.has(p.key) : !manualKeys.has(p.key)) && (Date.now() - new Date(p.day).getTime()) < 14 * 864e5);
-    if (keep.length !== all.length) savePending(keep);
-  }, [manualKeys]);
-  const pendingCards = pending.filter((p) => !p.unwatch).map((p) => {
-    const [o, d, dep, ret] = p.key.split("|");
-    const cands = M.offers.filter((x) => wkey(x) === p.key);
-    const same = cands.filter((x) => !p.itin || !p.itin.route || x.route === p.itin.route);
-    const cur = (same.length ? same : cands).sort((a, b) => a.price - b.price)[0];
-    const w = { key: p.key, origin: o, destination: d, depart_date: dep, return_date: ret, itin: p.itin, auto: false, pending: true, pendingIssue: p.issue, added: p.day, price_at_add: p.price, name: "Nový pin", nick: p.itin && p.itin.airlines ? p.itin.airlines.join(", ") : "",
-      current: cur ? { ...cur, dep_time: cur.legs && cur.legs[0] ? cur.legs[0].departure.slice(11, 16) : null } : null, same_itinerary: !!same.length, cheapest_any: cands.length ? [...cands].sort((a, b) => a.price - b.price)[0] : null,
-      history: M.queryHistory({ origin: o, destination: d, depart_date: dep, return_date: ret, source: "google" }).map((m) => ({ min: m })), prev_price: null };
-    return <WatchCard key={"pend" + p.key} w={w} M={M} />;
-  });
+  const [hideChanges, setHideChanges] = useState(false);
+  const WATCH = M.watch;
+  const tips = useMemo(() => WATCH.filter((w) => w.auto).slice(0, 5).map((w, i) => ({ ...w, rank: i + 1, favorite: false })), [WATCH]);
+  const manualByKey = useMemo(() => new Map(WATCH.filter((w) => !w.auto).map((w) => [w.key, w])), [WATCH]);
+  const favorites = useMemo(() => {
+    const local = favs.map((f) => resolveFavorite(f, M, manualByKey.get(f.key)));
+    const seen = new Set(local.map((x) => x.key));
+    // ručně sledované ve watchlist.yaml (např. z jiného zařízení) ukážeme také jako oblíbené
+    const remote = [...manualByKey.values()].filter((w) => !seen.has(w.key)).map((w) => ({ ...w, favorite: true, synced: true, favKey: `${w.key}#${(w.itin && w.itin.route) || ""}`, name: "Oblíbené" }));
+    return [...local, ...remote];
+  }, [favs, M, manualByKey]);
+  const all = useMemo(() => [...tips, ...favorites], [tips, favorites]);
+  const changes = useChanges(all, M);
+  const shown = useMemo(() => {
+    let l = view === "tips" ? tips : view === "fav" ? favorites : all;
+    const price = (w) => w.current ? w.current.price : Infinity;
+    if (sort === "price") l = [...l].sort((a, b) => price(a) - price(b));
+    else if (sort === "dur") l = [...l].sort((a, b) => ((a.current && a.current.duration_min) || 1e9) - ((b.current && b.current.duration_min) || 1e9));
+    else if (sort === "dep") l = [...l].sort((a, b) => a.depart_date.localeCompare(b.depart_date));
+    else if (sort === "delta") l = [...l].sort((a, b) => ((a.current && a.prev_price != null) ? a.current.price - a.prev_price : 1e9) - ((b.current && b.prev_price != null) ? b.current.price - b.prev_price : 1e9));
+    return l;
+  }, [view, sort, tips, favorites, all]);
   const pool = M.fresh.filter((o) => o.score != null);
   const list = useMemo(() => {
     let l = tab === "cheap" ? sortBy(pool, "price") : tab === "fast" ? sortBy(pool, "duration_min") : tab === "direct" ? sortBy(pool.filter((o) => o.stops <= 1), "score") : sortBy(pool, "score");
     const seen = new Set(); return l.filter((o) => { const k = `${o.depart_date}|${o.price}|${o.airlines.join()}|${o.route}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 6);
   }, [tab, pool]);
-  const localCards = pins.map((p) => {
-    const [o, d, dep, ret] = p.key.split("|");
-    const cands = M.offers.filter((x) => wkey(x) === p.key);
-    const same = cands.filter((x) => !p.itin || !p.itin.route || x.route === p.itin.route);
-    const cur = (same.length ? same : cands).sort((a, b) => a.price - b.price)[0];
-    const w = { key: p.key, origin: o, destination: d, depart_date: dep, return_date: ret, itin: p.itin, auto: false, local: true, added: p.day, price_at_add: p.price_at_pin, name: "Pin v prohlížeči", nick: p.itin && p.itin.airlines ? p.itin.airlines.join(", ") : "",
-      current: cur ? { ...cur, dep_time: cur.legs && cur.legs[0] ? cur.legs[0].departure.slice(11, 16) : null } : null, same_itinerary: !!same.length, cheapest_any: cands.length ? [...cands].sort((a, b) => a.price - b.price)[0] : null,
-      history: M.queryHistory({ origin: o, destination: d, depart_date: dep, return_date: ret, source: "google" }).map((m) => ({ min: m })), prev_price: null };
-    return <WatchCard key={p.key} w={w} M={M} extra={<button className="btn-pin" onClick={() => setPins(pins.filter((x) => x !== p))}>odepnout</button>} />;
-  });
+  const bestTip = tips.find((w) => w.current);
+  const addBest = () => { const c = bestTip && bestTip.current; if (c) toggleFavorite({ ...c, origin: bestTip.origin, destination: bestTip.destination, depart_date: bestTip.depart_date, return_date: bestTip.return_date }); };
+  const favTotal = favorites.filter((w) => w.current).reduce((a, w) => a + w.current.price, 0);
+
   return (
-    <section id="watch" className="panel watch">
-      <div className="panel-head"><h2><span className="ico">★</span> Lety ke sledování</h2><span className="muted small">{WATCH.length ? `${auto.length} tipů · ${man.length} tvoje · priorita ve skenu` : ""}</span></div>
-      <p className="intro">Jeden přehled: <strong>Tip 1–5</strong> jsou moje aktuálně nejlepší lety podle poměru cena/výkon (seřazené od nejlepšího, pak podle ceny), pod nimi <strong>tvoje piny</strong>. Všechny se kontrolují jako první, u každého je vidět, kde a jak dlouho je přestup, a při změně ceny přijde hlášení.</p>
-      {!WATCH.length ? <div className="empty">Zatím nic. Po příštím skenu se sem automaticky přidají nejlepší dealy; vlastní let přidáš tlačítkem „★ Sledovat“ v části „Prozkoumat“.</div> : <>
-        <div className="wgroup"><h3>Moje tipy</h3><span className="muted">Tip 1 = nejlepší poměr cena/výkon, dál podle ceny · obměňují se automaticky</span></div>
-        <div className="cards">{auto.length ? auto.map((w) => <WatchCard key={w.key} w={w} M={M} />) : <div className="empty">Po příštím skenu.</div>}</div>
-        <div className="wgroup"><h3>Tvoje piny</h3><span className="muted">ručně vybrané, hlídáme stejný let (aerolinky + trasa)</span></div>
-        <div className="cards">{man.map((w) => <WatchCard key={w.key} w={w} M={M} />)}{pendingCards}{!man.length && !pendingCards.length ? <div className="empty">Zatím žádný. Klikni na „★ Sledovat“ u nabídky v části „Prozkoumat“ nebo na „★ Nechat trvale“ u tipu.</div> : null}</div>
-      </>}
-      {pins.length ? <div className="localpins"><div className="panel-head"><h2>Připnuto jen v tomto prohlížeči</h2><span className="muted small">neovlivňuje sken; pro trvalé sledování použij ★ Sledovat</span></div><div className="cards">{localCards}</div></div> : null}
+    <section id="watch" className="panel watch main">
+      <div className="panel-head">
+        <div>
+          <h2><span className="ico">★</span> Sledované a oblíbené</h2>
+          <p className="intro">Hlavní přehled. <strong>Tipy</strong> vybírá skener každý den sám (nejlepší poměr cena/výkon), <strong>oblíbené</strong> si ukládáš hvězdičkou – hned, bez přihlašování. U každého letu vidíš odlet, přílet, kde a jak dlouho je přestup a jak se hýbe cena.</p>
+        </div>
+        <div className="fc-controls">
+          <div className="seg" role="tablist">
+            <button role="tab" aria-selected={view === "all"} onClick={() => setView("all")}>Vše <span className="cnt">{all.length}</span></button>
+            <button role="tab" aria-selected={view === "tips"} onClick={() => setView("tips")}>Tipy skeneru <span className="cnt">{tips.length}</span></button>
+            <button role="tab" aria-selected={view === "fav"} onClick={() => setView("fav")}>★ Oblíbené <span className="cnt">{favorites.length}</span></button>
+          </div>
+          <label className="sortsel">Řadit <select value={sort} onChange={(e) => setSort(e.target.value)}>{SORTS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></label>
+        </div>
+      </div>
+
+      {changes.length && !hideChanges ? (
+        <div className="changes">
+          <div className="changes-head"><strong>Od tvé poslední návštěvy</strong> <span className="muted small">(stav k {dcz(changes[0].day)})</span><button className="btn-more" onClick={() => setHideChanges(true)}>skrýt</button></div>
+          <ul>{changes.map((c) => <li key={c.w.favKey}>{c.kind === "gone" ? <span className="chip up">zmizel z nabídky</span> : c.kind === "down" ? <span className="chip down">▼ {czk(-c.d)}</span> : <span className="chip up">▲ {czk(c.d)}</span>} {routeName(`${c.w.origin}→${c.w.destination}`)} · {dshort(c.w.depart_date)}–{dshort(c.w.return_date)} · {(c.w.itin && c.w.itin.airlines || []).join(", ")}{c.kind !== "gone" ? <span className="muted"> · teď {czk(c.w.current.price)}</span> : <span className="muted"> · naposledy {czk(c.prev)}</span>}</li>)}</ul>
+        </div>
+      ) : null}
+
+      {view !== "tips" && !favorites.length ? (
+        <div className="fav-empty">
+          <div className="big">☆</div>
+          <div>
+            <strong>Zatím nemáš žádný oblíbený let.</strong>
+            <div className="small muted">Klikni na „☆ Do oblíbených“ u kteréhokoliv tipu nebo nabídky. Uloží se okamžitě v tomto prohlížeči a hned uvidíš, jak se mu mění cena.</div>
+            <div className="links" style={{ marginTop: 8 }}>
+              {bestTip ? <button className="btn-fav" onClick={addBest}>☆ Přidat Tip 1 ({czk(bestTip.current.price)})</button> : null}
+              <a className="search" href="#deals" onClick={() => { const d = document.getElementById("deals"); if (d) d.open = true; }}>prozkoumat další nabídky</a>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {shown.length ? <div className="fcards">{shown.map((w) => <FlightCard key={(w.favorite ? "f" : "t") + (w.favKey || w.key)} w={w} M={M} rank={w.rank} />)}</div>
+        : view === "tips" ? <div className="empty">Tipy se vyberou po příštím skenu.</div> : null}
+
+      {favorites.length > 1 && favTotal ? <div className="fc-sum small muted">Součet tvých oblíbených: {czk(favTotal)}/os · {czk(favTotal * M.travelers)} pro {M.travelers} (jen lety, které jsou dnes v nabídce)</div> : null}
+
       <details id="deals" className="explore">
-        <summary><strong>Prozkoumat další nabídky</strong> <span className="muted small">· nejlevnější, nejrychlejší, max 1 přestup · odtud přidáš vlastní pin</span></summary>
+        <summary><strong>Prozkoumat další nabídky</strong> <span className="muted small">· nejlevnější, nejrychlejší, max 1 přestup · odtud přidáš oblíbené</span></summary>
         <div className="panel-head" style={{ marginTop: 10 }}><div className="tabs" role="tablist">{TABS.map(([k, t]) => <button key={k} className="tab" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{t}</button>)}</div></div>
         <p className="muted small">{TABS.find((t) => t[0] === tab)[2]}</p>
-        <div className="cards">{list.length ? list.map((o, i) => <DealCard key={o.id + i} o={o} i={i} M={M} pins={pins} setPins={setPins} watchedKeys={watchedKeys} />) : <div className="empty">Žádné nabídky v posledním skenu.</div>}</div>
+        <div className="cards">{list.length ? list.map((o, i) => <DealCard key={o.id + i} o={o} i={i} M={M} />) : <div className="empty">Žádné nabídky v posledním skenu.</div>}</div>
       </details>
     </section>
   );

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { city, czk, dcz, durShort, loadPins, savePins, sortBy, wd } from "../lib/format.js";
+import { city, czk, dcz, durShort, sortBy, wd } from "../lib/format.js";
 import { Badges, Links, PinButtons, Sellers, Sparkline, Timeline, scoreWhy } from "./Shared.jsx";
 
 const PRESETS = [["Vše", {}], ["Max 1 přestup", { stops: "1" }], ["Do 20 000 Kč", { maxPrice: "20000", sort: "price" }], ["Jen srpen", { month: "8" }], ["Jen září", { month: "9" }], ["Nejrychlejší", { sort: "duration_min" }]];
@@ -11,8 +11,6 @@ export default function AllOffers({ M }) {
   const [shown, setShown] = useState(60);
   const [open, setOpen] = useState({});
   const [sortKey, setSortKey] = useState(null); const [sortDir, setSortDir] = useState(1);
-  const [pins, setPinsState] = useState(loadPins);
-  const setPins = (p) => { setPinsState(p); savePins(p); };
   const watchedKeys = useMemo(() => new Set(M.watch.map((w) => w.key)), [M.watch]);
   const uniq = (k) => [...new Set(offers.map((o) => o[k]))].sort();
   const rows = useMemo(() => sortBy(offers.filter((o) => (!F.origin || o.origin === F.origin) && (!F.dest || o.destination === F.dest) && (F.stops === "" || o.stops <= +F.stops) && (!F.nights || String(o.nights) === F.nights) && (!F.month || o._month === +F.month) && (!F.maxPrice || o.price <= +F.maxPrice) && (F.stale === "1" || !o.stale)), sortKey || F.sort, sortDir), [offers, F, sortKey, sortDir]);
@@ -47,7 +45,7 @@ export default function AllOffers({ M }) {
                     <td className={cls}>{trend}{o.is_all_time_low ? " ★" : ""}{o.stale ? " (starší)" : ""}</td>
                     <td><button className="toggle" onClick={() => setOpen({ ...open, [o._i]: !open[o._i] })}>detail</button></td>
                   </tr>
-                  {open[o._i] ? <tr className="detail"><td colSpan="11"><Timeline o={o} detailed /><Badges o={o} latestDay={M.latest.day} /><Sellers o={o} /><div className="why">{scoreWhy(o)}</div><div className="small muted">Vývoj ceny tohoto termínu: <Sparkline values={M.queryHistory(o)} /></div><Links o={o} /><PinButtons o={o} pins={pins} setPins={setPins} watchedKeys={watchedKeys} /></td></tr> : null}
+                  {open[o._i] ? <tr className="detail"><td colSpan="11"><Timeline o={o} detailed /><Badges o={o} latestDay={M.latest.day} /><Sellers o={o} /><div className="why">{scoreWhy(o)}</div><div className="small muted">Vývoj ceny tohoto termínu: <Sparkline values={M.queryHistory(o)} /></div><Links o={o} /><PinButtons o={o} /></td></tr> : null}
                 </React.Fragment>
               );
             })}

@@ -1,13 +1,10 @@
 import React, { useMemo, useState } from "react";
 import { addDays, czk, dcz, dday, kcs, MONTHS, routeName, sortBy, wd } from "../lib/format.js";
 import { DealCard } from "./Watch.jsx";
-import { loadPins, savePins } from "../lib/format.js";
 
 export default function Calendar({ M }) {
   const { queries, offers, fresh, routeOrder, cfg, HORIZON, HORIZON_DAYS, opensOn } = M;
   const [sel, setSel] = useState(null);
-  const [pins, setPinsState] = useState(loadPins);
-  const setPins = (p) => { setPinsState(p); savePins(p); };
   const watchedKeys = useMemo(() => new Set(M.watch.map((w) => w.key)), [M.watch]);
   const model = useMemo(() => {
     const planDates = [...new Set(queries.map((q) => q.depart_date))].sort();
@@ -55,7 +52,7 @@ export default function Calendar({ M }) {
         })}
       </div>
       <div className="legend small">Cena v tisících Kč/os (nejlevnější ze všech délek pobytu): nejlevnější<i className="ramp" />nejdražší<span style={{ "--c": "transparent", marginLeft: 14 }}>→ = mimo prodejní okno ({HORIZON_DAYS} dní dopředu), otevře se postupně</span><span style={{ "--c": "transparent" }}>· = v okně, ale Google nenabízí spojení</span><span style={{ "--c": "transparent" }}>★ = nejnižší cena skenu</span><span style={{ "--c": "var(--good)" }}>zelený rámeček = nově v prodeji</span><span style={{ "--c": "transparent" }}>bledé = starší data</span></div>
-      {detail ? <div className="cal-detail"><div className="panel-head"><h2>{routeName(detail.r)} · odlet {wd(detail.d)} {dcz(detail.d)}</h2><span className="muted small">nejnižší cena podle délky pobytu: {detail.perLen}</span></div><div className="cards">{detail.list.map((o, i) => <DealCard key={o.id} o={o} i={i} M={M} pins={pins} setPins={setPins} watchedKeys={watchedKeys} />)}</div></div> : null}
+      {detail ? <div className="cal-detail"><div className="panel-head"><h2>{routeName(detail.r)} · odlet {wd(detail.d)} {dcz(detail.d)}</h2><span className="muted small">nejnižší cena podle délky pobytu: {detail.perLen}</span></div><div className="cards">{detail.list.map((o, i) => <DealCard key={o.id} o={o} i={i} M={M} watchedKeys={watchedKeys} />)}</div></div> : null}
     </section>
   );
 }

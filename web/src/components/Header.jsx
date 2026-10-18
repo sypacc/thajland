@@ -1,9 +1,11 @@
 import React from "react";
 import { ago, dcz, tm } from "../lib/format.js";
 import { ThemeToggle } from "./Settings.jsx";
+import { useFavorites } from "../lib/favorites.js";
 
 export default function Header({ M, onSettings }) {
   const s = M && M.latest.stats, days = M ? M.days.length : 0;
+  const favs = useFavorites();
   return (
     <header className="top">
       <div className="wrap">
@@ -23,7 +25,7 @@ export default function Header({ M, onSettings }) {
           </div>
         </div>
         <nav className="nav" aria-label="Sekce">
-          <a href="#watch">Lety ke sledování</a><a href="#alertsPanel">Hlášení</a><a href="#deals">Prozkoumat</a><a href="#calendarPanel">Kalendář</a><a href="#trend">Vývoj</a><a href="#allPanel">Vše</a><a href="#howto">Jak číst</a>
+          <a href="#watch" className="nav-main">★ Sledované a oblíbené{favs.length ? <span className="cnt">{favs.length}</span> : null}</a><a href="#verdict">Verdikt</a><a href="#alertsPanel">Hlášení</a><a href="#deals">Prozkoumat</a><a href="#calendarPanel">Kalendář</a><a href="#trend">Vývoj</a><a href="#allPanel">Vše</a><a href="#howto">Jak číst</a>
           <span className="nav-spacer" />
           <ThemeToggle />
           {onSettings ? <button className="nav-btn" onClick={onSettings} title="Nastavení: piny jedním klikem, motiv">⚙️ Nastavení</button> : null}
