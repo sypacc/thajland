@@ -179,13 +179,24 @@ jobs:
             git pull --rebase origin "${GITHUB_REF_NAME}" || true
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
-      - name: Sestavit web
+      - uses: actions/setup-node@v4
+        if: always()
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Sestavit web (React/Vite)
+        if: always()
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Připravit publikaci
         if: always()
         run: |
           rm -rf _site && mkdir -p _site
-          cp index.html _site/
-          cp -r assets _site/
-          mkdir -p _site/data && cp data/*.json data/*.js _site/data/ 2>/dev/null || true
+          cp -r web/dist/. _site/
+          mkdir -p _site/data && cp data/*.json _site/data/ 2>/dev/null || true
           touch _site/.nojekyll
       # Publikace na větev gh-pages (Pages: Deploy from a branch → gh-pages). URL: https://sypacc.github.io/thajland/
       - name: Publikovat dashboard (větev gh-pages)

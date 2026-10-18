@@ -18,7 +18,7 @@ a dashboard, který ukazuje nejlepší příležitosti podle **poměru cena/výk
    za 2. a další přestup, za dlouhé (>5 h) či rizikově krátké (<1 h) přestupy ± korekce za aerolinku,
    přímý let má bonus. Váhy jsou v `config.yaml` → sekce `scoring`.
 4. Výsledky uloží do `data/` (poslední sken + denní historie + série pro grafy) a commitne je.
-5. **Dashboard** (`index.html`, GitHub Pages) v pořadí podle důležitosti:
+5. **Dashboard** (React + Vite ve složce `web/`, publikovaný na GitHub Pages) v pořadí podle důležitosti:
    **Verdikt** (kupovat / férová cena / počkat, po trasách, s cenou pro N osob a pokrytím termínů) →
    **Postřehy z dat** (odkud a kam je levněji, nejlevnější týden, délka pobytu, přímé lety, trend) →
    **Hlášení** → **Nejlepší nabídky** (taby: poměr cena/výkon, nejlevnější, nejrychlejší, max 1 přestup;
@@ -95,11 +95,15 @@ v Settings → Secrets and variables → Actions):
 pip install -r requirements.txt playwright && python -m playwright install chromium
 python -m scanner.run --limit 5      # rychlý test (5 dotazů)
 python -m scanner.run                # plný běh dle config.yaml
-python -m http.server 8000           # dashboard: http://localhost:8000/
 python -m pytest -q tests
+
+cd web && npm install && npm run dev # dashboard na http://localhost:5173/ (data se kopírují z ../data)
+npm run build                        # produkční build do web/dist
 ```
 
-Dashboard čte `data/latest.js` a `data/series.js`, funguje i otevřený přímo ze souboru.
+Dashboard je React (Vite) ve složce `web/`: komponenty po sekcích v `web/src/components/`, sdílené výpočty
+v `web/src/lib/` (`analysis.js` = verdikt, postřehy, pokrytí; `format.js` = formátování, názvy, odkazy, piny).
+Načítá `data/latest.json`, `data/series.json`, `data/alerts.json` relativně, takže funguje na Pages i lokálně.
 
 ## Úpravy
 

@@ -233,3 +233,13 @@ section[id], details[id] { scroll-margin-top: 12px; }
 .wcard .wname { font-size: 1.05rem; font-weight: 800; letter-spacing: -.01em; }
 .wcard .wname .nick { font-weight: 600; color: var(--accent); }
 .wcard.manual .wname .nick { color: #b8860b; }
+
+/* --- React verze: časová osa s rozpisem přestupů v kartě sledovaného letu --- */
+.wcard .wfull { grid-column: 1 / -1; }
+.tlwrap { display: flex; flex-direction: column; gap: 4px; }
+.layover-list { list-style: none; margin: 4px 0 0; padding: 0; font-size: .82rem; color: var(--text-2); display: grid; gap: 2px; }
+.layover-list .seg { color: var(--text); }
+.layover-list .lay-row { padding: 4px 8px; border-radius: 6px; background: var(--surface); border-left: 3px solid var(--border); }
+.layover-list .lay-row strong { color: var(--text); }
+.layover-list .lay-row.long { border-left-color: var(--warn); background: var(--warn-bg); }
+.layover-list .lay-row.short { border-left-color: var(--bad); background: var(--bad-bg); }

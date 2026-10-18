@@ -137,6 +137,10 @@ def _compact(o: dict[str, Any]) -> dict[str, Any]:
     return {"id": o.get("id"), "price": o["price"], "score": o.get("score"), "airlines": o.get("airlines", []),
             "route": o.get("route"), "stops": o.get("stops"), "duration_min": o.get("duration_min"),
             "dep_time": (o["legs"][0]["departure"][11:16] if o.get("legs") else None),
+            "legs": [{"from_airport": l.get("from_airport"), "to_airport": l.get("to_airport"), "departure": l.get("departure"),
+                      "arrival": l.get("arrival"), "duration_min": l.get("duration_min"), "plane": l.get("plane")}
+                     for l in (o.get("legs") or [])],
+            "layovers": [{"airport": x.get("airport"), "minutes": x.get("minutes")} for x in (o.get("layovers") or [])],
             "links": {"google": (o.get("links") or {}).get("google")}, "stale": bool(o.get("stale"))}
 
 
