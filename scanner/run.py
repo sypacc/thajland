@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from . import alerts as alerts_mod
+from . import complement
 from . import storage
 from . import watchlist as watch_mod
 from .config import Config, load_config
@@ -44,7 +45,8 @@ def _compact(o: dict[str, Any]) -> dict[str, Any]:
 
 # --------------------------------------------------------------------------- sken
 def scan(cfg: Config, *, limit: int | None = None, only_source: str | None = None, shuffle: bool = True,
-         only_route: str | None = None, only_origin: str | None = None) -> dict[str, Any]:
+         only_route: str | None = None, only_origin: str | None = None,
+         only_keys: set[str] | None = None) -> dict[str, Any]:
     """Projde (část) plánu a vrátí {"offers": [dict], "queries": [dict], "scan": {...}}."""
     started = time.monotonic()
     today = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
@@ -67,6 +69,8 @@ def scan(cfg: Config, *, limit: int | None = None, only_source: str | None = Non
     if only_route:
         o_, d_ = only_route.upper().split("-")
         plan = [p for p in plan if p[0] == o_ and p[1] == d_]
+    if only_keys is not None:
+        plan = [p for p in plan if f"{p[0]}|{p[1]}|{p[2].isoformat()}|{p[3].isoformat()}" in only_keys]
     if shuffle:
         random.Random(today).shuffle(plan)
     # priorita: 1) sledované lety, 2) termíny na hranici prodejního okna (otevírají se právě teď), 3) zbytek
@@ -282,7 +286,7 @@ def finalize(cfg: Config, parts: list[dict[str, Any]], *, enrich: bool = True) -
         "queries_total": len(queries), "queries_ok": len(ok),
         "queries_error": sum(1 for q in queries if q["status"] == "error"),
         "queries_skipped": sum(1 for q in queries if str(q["status"]).startswith("skipped")),
-        "queries_stale": carried, "queries_new": sum(1 for q in queries if q.get("is_new")),
+        "queries_stale": sum(1 for q in queries if q.get("stale")), "queries_new": sum(1 for q in queries if q.get("is_new")),
         "offers": len(offers),
         "min_price": min(prices) if prices else None,
         "median_min_price": int(statistics.median(prices)) if prices else None,
@@ -372,6 +376,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-enrich", action="store_true", help="nenačítat prodejce")
     ap.add_argument("--no-save", action="store_true")
     ap.add_argument("--no-notify", action="store_true", help="hlášení jen uložit, neposílat")
+    ap.add_argument("--complement", action="store_true",
+                    help="doplňkový sken: zopakovat jen selhané/prázdné/sledované dotazy z data/latest.json a sloučit")
+    ap.add_argument("--complement-dry-run", action="store_true", help="jen vypsat, co by se opakovalo")
+    ap.add_argument("--time-budget", type=float, default=None, help="přepsat scan.time_budget_minutes")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args(argv)
 
@@ -380,6 +388,19 @@ def main(argv: list[str] | None = None) -> int:
     cfg = load_config(args.config)
     if args.max_stops is not None:
         cfg.raw["trip"]["max_stops"] = None if str(args.max_stops).lower() == "none" else int(args.max_stops)
+
+    if args.time_budget is not None:
+        cfg.raw.setdefault("scan", {})["time_budget_minutes"] = args.time_budget
+
+    if args.complement or args.complement_dry_run:
+        payload = complement.run(cfg, scan_fn=scan, finalize_fn=finalize, enrich=not args.no_enrich,
+                                 dry_run=args.complement_dry_run)
+        if payload is None:
+            return 0
+        log.info("Hotovo: %s", payload["stats"])
+        if not args.no_save:
+            save_all(cfg, payload, notify=not args.no_notify)
+        return 0
 
     if args.merge:
         parts = []

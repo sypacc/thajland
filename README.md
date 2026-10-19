@@ -97,6 +97,31 @@ v Settings → Secrets and variables → Actions):
 4. Po každém běhu je v Actions k dispozici artefakt `debug-N` se surovými odpověďmi (chybové stránky Google,
    HTML Azairu, screenshoty z načítání prodejců) pro ladění.
 
+## Doplňkový sken z Claude rutiny (9:30)
+
+Ranní běh v GitHub Actions občas na část dotazů nedosáhne: Google některé zablokuje, vrátí dočasně
+prázdnou stránku, nebo dojde časový rozpočet. Druhý průchod proto běží z jiného prostředí – z cloudové
+rutiny Claude Code (každý den kolem 9:30 SEČ) – a výsledek se **sjednotí** s ranním během:
+
+```bash
+python -m scanner.run --complement-dry-run      # jen vypíše, co by se opakovalo a proč
+python -m scanner.run --complement --time-budget 40
+```
+
+- Vstup je dnešní `data/latest.json`. Vyberou se jen dotazy, které za to stojí, v tomhle pořadí:
+  sledované lety, selhané/přeskočené, převzaté ze staršího běhu, prázdné uvnitř prodejního okna,
+  hranice prodejního okna (termíny, které se právě otevírají).
+- Sloučení je konzervativní: nový výsledek nahradí ranní jen když je lepší (má nabídky, nebo ranní
+  neměl žádné a nový aspoň regulérně doběhl). Pak se přepočítají příznaky, sledované lety, historie dne,
+  série i hlášení – stejně jako po ranním běhu. Nahrazené dotazy a nabídky mají `run: "complement"`,
+  souhrn je v `latest.json → complement` a na dashboardu ve „Stavu skenu“.
+- Commit dat na větev spustí workflow `publish.yml`, které znovu sestaví a publikuje dashboard.
+- Pokud ranní běh pokryl všechno, rutina nic nemění.
+
+**Síť:** rutina běží v cloudovém prostředí Claude Code. To prostředí musí mít povolený přístup
+na `www.google.com` (Google Flights), jinak doplňkový sken nic nenačte a jen to ohlásí. Nastavuje se
+v prostředí (Network access → Full, nebo přidat doménu do Allowed domains).
+
 ## Lokální spuštění
 
 ```bash
