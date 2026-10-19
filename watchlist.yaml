@@ -9,4 +9,71 @@ auto:
   enabled: true
   top: 5
   keep_days: 10
-watch: []
+watch:
+- origin: PRG
+  destination: BKK
+  depart_date: '2027-08-31'
+  return_date: '2027-09-13'
+  auto: true
+  added: '2026-10-19'
+  last_top: '2026-10-19'
+  price_at_add: 12525
+  itin:
+    airlines:
+    - LOT
+    route: PRG→WAW→BKK
+    dep_time: '12:45'
+- origin: PRG
+  destination: BKK
+  depart_date: '2027-08-26'
+  return_date: '2027-09-10'
+  auto: true
+  added: '2026-10-19'
+  last_top: '2026-10-19'
+  price_at_add: 15295
+  itin:
+    airlines:
+    - Qatar Airways
+    route: PRG→DOH→BKK
+    dep_time: '15:50'
+- origin: VIE
+  destination: BKK
+  depart_date: '2027-08-27'
+  return_date: '2027-09-10'
+  auto: true
+  added: '2026-10-19'
+  last_top: '2026-10-19'
+  price_at_add: 14792
+  itin:
+    airlines:
+    - SalamAir
+    - Oman Air
+    route: VIE→MCT→BKK
+    dep_time: '22:25'
+- origin: VIE
+  destination: HKT
+  depart_date: '2027-08-27'
+  return_date: '2027-09-10'
+  auto: true
+  added: '2026-10-19'
+  last_top: '2026-10-19'
+  price_at_add: 14792
+  itin:
+    airlines:
+    - SalamAir
+    - Oman Air
+    route: VIE→MCT→HKT
+    dep_time: '22:25'
+- origin: VIE
+  destination: HKT
+  depart_date: '2027-08-24'
+  return_date: '2027-09-06'
+  auto: true
+  added: '2026-10-19'
+  last_top: '2026-10-19'
+  price_at_add: 14260
+  itin:
+    airlines:
+    - Scoot
+    route: VIE→SIN→HKT
+    dep_time: '12:10'
