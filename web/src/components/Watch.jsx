@@ -58,7 +58,7 @@ export default function Watch({ M }) {
   const [tab, setTab] = useState(() => (M.pref ? "pref" : "best"));
   const [hideChanges, setHideChanges] = useState(false);
   const WATCH = M.watch;
-  const tips = useMemo(() => WATCH.filter((w) => w.auto).slice(0, 5).map((w, i) => ({ ...w, rank: i + 1, favorite: false })), [WATCH]);
+  const tips = useMemo(() => WATCH.filter((w) => w.auto).slice(0, 8).map((w, i) => ({ ...w, rank: i + 1, favorite: false })), [WATCH]);
   const manualByKey = useMemo(() => new Map(WATCH.filter((w) => !w.auto).map((w) => [w.key, w])), [WATCH]);
   const favorites = useMemo(() => {
     const local = favs.map((f) => resolveFavorite(f, M, manualByKey.get(f.key)));
