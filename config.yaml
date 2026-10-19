@@ -63,7 +63,7 @@ scoring:
   # Aerolinky: kladné = horší (připočte se), záporné = lepší (odečte se).
   airline_adjust_czk:
     "Emirates": -1200
-    "Qatar Airways": -1200
+    "Qatar Airways": -1800   # preferovaná aerolinka (viz preferred níže)
     "Singapore Airlines": -1200
     "EVA Air": -1000
     "Cathay Pacific": -800
@@ -98,6 +98,18 @@ scoring:
     "Kuwait Airways": 800
     "Gulf Air": 300
     "SriLankan": 300
+
+# Preferovaná aerolinka: dostane prioritu napříč systémem – vlastní cenová hranice pro hlášení,
+# hlášení při každém novém minimu, rezervovaná místa v automatických tipech, přednostní znovuověření
+# nejlevnějších termínů v doplňkovém skenu a vlastní záložka na dashboardu.
+preferred:
+  airlines: ["Qatar Airways"]
+  # Hlášení, jakmile preferovaná aerolinka klesne pod tuto cenu za osobu (nezávisle na alerts.target_price).
+  target_price: 14000
+  # Kolik míst v automatických tipech je rezervováno pro nejlevnější let preferované aerolinky (na každou destinaci jedno).
+  reserve_tips: 2
+  # Kolik nejlevnějších termínů preferované aerolinky znovu ověřit v doplňkovém skenu (být první, kdo pokles uvidí).
+  recheck_top: 8
 
 # Hlášení (alerty) – kdy považovat nabídku za abnormálně nízkou / zajímavý deal.
 alerts:

@@ -21,6 +21,7 @@ from typing import Any
 
 from . import alerts as alerts_mod
 from . import complement
+from . import preferred as pref_mod
 from . import storage
 from . import watchlist as watch_mod
 from .config import Config, load_config
@@ -249,7 +250,9 @@ def finalize(cfg: Config, parts: list[dict[str, Any]], *, enrich: bool = True) -
     # sledované lety (ruční piny + automatické top dealy)
     wl = watch_mod.load_watchlist()
     wd = watch_mod.load_watch_data()
-    watch_items = watch_mod.evaluate(wl, {"day": today, "offers": offers}, wd)
+    pref_cfg = cfg.raw.get("preferred") or {}
+    pref = pref_mod.summary(offers, pref_cfg, pref_mod.load_minima())
+    watch_items = watch_mod.evaluate(wl, {"day": today, "offers": offers, "preferred": pref_cfg}, wd)
     watched_keys = {w["key"] for w in watch_items}
     for o in offers:
         o["watched"] = watch_mod.watch_key(o["origin"], o["destination"], o["depart_date"], o["return_date"]) in watched_keys
@@ -303,7 +306,9 @@ def finalize(cfg: Config, parts: list[dict[str, Any]], *, enrich: bool = True) -
             "travelers": cfg.travelers, "currency": cfg.currency, "cabin": cfg.cabin,
             "max_stops": cfg.max_stops, "sources": [s for s in ("google", "azair") if cfg.source_enabled(s)],
             "scoring": cfg.scoring, "alerts": {"target_price": cfg.raw.get("alerts", {}).get("target_price")},
+            "preferred": pref_cfg,
         },
+        "preferred": pref,
         "stats": stats, "queries": queries, "offers": offers,
         "booking_horizon": booking_horizon(cfg, dt.date.fromisoformat(today)).isoformat(),
         "watch": watch_items, "_watchlist": wl, "_watch_data": wd,
@@ -355,6 +360,8 @@ def save_all(cfg: Config, payload: dict[str, Any], *, notify: bool = True) -> No
     if wd is not None:
         watch_mod.save_watch_data(wd)
     storage.save_latest(payload)
+    if payload.get("preferred"):
+        pref_mod.save_minima(pref_mod.update_minima(pref_mod.load_minima(), payload["preferred"], payload["day"]))
     storage.save_history_snapshot(payload["day"], payload["queries"])
     storage.save_series(storage.build_series(storage.load_history()))
     alerts_mod.save_alerts(existing + new_alerts)

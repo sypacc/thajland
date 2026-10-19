@@ -1,5 +1,5 @@
 // Odvozená data: pokrytí, prodejní okno, verdikt po trasách, postřehy.
-import { addDays, city, czk, dcz, fromCity, median, MONTHS, routeName, sortBy } from "./format.js";
+import { addDays, city, czk, dcz, dshort, fromCity, median, MONTHS, routeName, sortBy } from "./format.js";
 
 export function buildModel(latest, series, alerts) {
   const cfg = latest.config;
@@ -33,7 +33,16 @@ export function buildModel(latest, series, alerts) {
     return { state: "warn", label: `počkat · ${Math.round((cur / med - 1) * 100)} % nad obvyklou cenou`, cur, days: hist.length, med };
   };
   const queryHistory = (o) => days.map((d) => { const r = (d.queries || []).find((q) => q[0] === o.origin && q[1] === o.destination && q[2] === o.depart_date && q[3] === o.return_date && q[4] === (o.source || "google")); return r ? r[5] : null; });
-  return { latest, cfg, offers, fresh, routeOrder, days, queries, alerts: alerts || [], watch: latest.watch || [], HORIZON, HORIZON_DAYS, opensOn, coverage, routeHistory, routeVerdict, queryHistory, travelers: cfg.travelers || 1 };
+  // preferovaná aerolinka (config.preferred): minima po trasách a měsících z čerstvých nabídek
+  const prefCfg = (cfg.preferred && cfg.preferred.airlines && cfg.preferred.airlines.length) ? cfg.preferred : null;
+  const isPref = (o) => !!prefCfg && o.airlines && o.airlines.length > 0 && o.airlines.every((a) => prefCfg.airlines.includes(a));
+  const prefOffers = prefCfg ? fresh.filter(isPref) : [];
+  const minBy = (fn) => { const m = {}; for (const o of prefOffers) { const k = fn(o); if (!m[k] || o.price < m[k].price) m[k] = o; } return m; };
+  const pref = prefCfg ? { cfg: prefCfg, name: prefCfg.airlines.join(", "), offers: prefOffers, isPref,
+    overall: prefOffers.length ? [...prefOffers].sort((a, b) => a.price - b.price)[0] : null,
+    byRoute: minBy((o) => o._rk), byMonth: minBy((o) => o._month), byDest: minBy((o) => o.destination),
+    prev: (latest.preferred && latest.preferred.prev_min_by_route) || {}, newLow: (latest.preferred && latest.preferred.new_low_routes) || {} } : null;
+  return { latest, cfg, offers, fresh, routeOrder, days, queries, alerts: alerts || [], watch: latest.watch || [], pref, HORIZON, HORIZON_DAYS, opensOn, coverage, routeHistory, routeVerdict, queryHistory, travelers: cfg.travelers || 1 };
 }
 
 export function insights(M) {
@@ -76,6 +85,12 @@ export function insights(M) {
     const meds = Object.entries(per).map(([n, v]) => [n, median(v)]).sort((x, y) => x[1] - y[1]);
     if (meds.length >= 2 && meds[meds.length - 1][1] - meds[0][1] > 400) out.push(`Délka pobytu <strong>${meds[0][0]} dní</strong> vychází nejlevněji (medián ${czk(meds[0][1])}), ${meds[meds.length - 1][0]} dní ${czk(meds[meds.length - 1][1])}.`);
     else if (meds.length >= 2) out.push("Délka pobytu 13/14/15 dní cenu prakticky nemění, vyber podle dovolené.");
+  }
+  if (M.pref && M.pref.overall) {
+    const P = M.pref, o = P.overall; const months = Object.entries(P.byMonth).sort().map(([m, x]) => `${MONTHS[+m]} od <strong>${czk(x.price)}</strong>`).join(", ");
+    const prevAll = Object.values(P.prev).map((x) => x.price).filter((x) => x != null); const prevMin = prevAll.length ? Math.min(...prevAll) : null;
+    const tgt = P.cfg.target_price;
+    out.unshift(`<strong>${P.name} (preferovaná):</strong> nejlevněji ${czk(o.price)}/os · ${routeName(o._rk)} · ${dshort(o.depart_date)}–${dshort(o.return_date)}; ${months}${prevMin != null ? (o.price < prevMin ? ` · <strong>nové minimum</strong> (dosud ${czk(prevMin)})` : ` · dosavadní minimum ${czk(prevMin)}`) : ""}${tgt ? ` · hlášení přijde pod ${czk(tgt)}` : ""}.`);
   }
   const direct = fresh.filter((o) => o.stops === 0);
   if (direct.length) out.push(`Přímý let existuje od <strong>${czk(Math.min(...direct.map((o) => o.price)))}</strong> (${[...new Set(direct.map((o) => o.airlines.join("/")))].join(", ")}).`);

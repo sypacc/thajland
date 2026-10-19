@@ -412,3 +412,9 @@ details summary.muted { cursor: pointer; }
 .more-links .links a { font-size: .76rem; padding: 5px 10px; }
 .statusbar { flex-wrap: wrap; }
 @media (max-width: 600px) { .statusbar > :nth-child(n+3):not(.warn):not(.bad) { display: none; } .statusbar { flex-wrap: wrap; overflow: visible; } .statusbar > span { white-space: normal; } .seg button { padding: 7px 11px; } }
+
+/* --- preferovaná aerolinka --- */
+.kpi.pref { border-color: color-mix(in oklab, var(--accent) 45%, var(--border)); background: linear-gradient(180deg, var(--accent-bg), var(--surface) 70%); }
+.kpi.pref.low .value { color: var(--good); }
+.tab.pref { border: 1px solid color-mix(in oklab, var(--accent) 50%, transparent); color: var(--accent-ink); }
+.tab.pref[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }

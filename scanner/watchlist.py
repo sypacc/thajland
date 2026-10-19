@@ -183,16 +183,35 @@ def save_watch_data(data: dict[str, Any]) -> None:
     WATCH_DATA_PATH.with_suffix(".js").write_text(f"window.THAJLAND_WATCH = {text};\n", encoding="utf-8")
 
 
-def auto_select(offers: list[dict[str, Any]], n: int, per_route: int = 2) -> list[dict[str, Any]]:
+def auto_select(offers: list[dict[str, Any]], n: int, per_route: int = 2,
+                preferred: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """Top N čerstvých nabídek podle skóre, pestré: jiný itinerář (aerolinky+trasa) a max. `per_route` na trasu.
 
-    Bez toho by se vybral pětkrát tentýž let v sousedních dnech.
+    Bez toho by se vybral pětkrát tentýž let v sousedních dnech. Preferovaná aerolinka (config `preferred`)
+    má rezervovaná místa: nejlevnější její let na každou destinaci jde do výběru vždy, i kdyby skóre nestačilo.
     """
     fresh = sorted([o for o in offers if not o.get("stale") and o.get("score") is not None], key=lambda o: o["score"])
     seen_itin: set[tuple] = set()
     per: dict[tuple, int] = {}
     picked = []
+    pref_air = {str(a) for a in ((preferred or {}).get("airlines") or [])}
+    reserve = int((preferred or {}).get("reserve_tips") or 0)
+    if pref_air and reserve > 0:
+        by_dest: dict[str, dict[str, Any]] = {}
+        for o in fresh:
+            if o.get("airlines") and all(a in pref_air for a in o["airlines"]):
+                d = o["destination"]
+                if d not in by_dest or o["price"] < by_dest[d]["price"]:
+                    by_dest[d] = o
+        for o in sorted(by_dest.values(), key=lambda x: x["price"])[:reserve]:
+            itin = (o["origin"], o["destination"], tuple(o.get("airlines") or []), o.get("route"))
+            rk = (o["origin"], o["destination"])
+            seen_itin.add(itin); per[rk] = per.get(rk, 0) + 1; picked.append(o)
     for o in fresh:
+        if len(picked) >= n:
+            break
+        if o in picked:
+            continue
         itin = (o["origin"], o["destination"], tuple(o.get("airlines") or []), o.get("route"))
         rk = (o["origin"], o["destination"])
         if itin in seen_itin or per.get(rk, 0) >= per_route:
@@ -211,7 +230,7 @@ def evaluate(watchlist: dict[str, Any], payload: dict[str, Any], watch_data: dic
     entries = [e for e in entries if e]
     if auto_cfg.get("enabled", True):
         keys = {watch_key(e["origin"], e["destination"], e["depart_date"], e["return_date"]) for e in entries}
-        for o in auto_select(payload.get("offers", []), int(auto_cfg.get("top", 5))):
+        for o in auto_select(payload.get("offers", []), int(auto_cfg.get("top", 5)), preferred=payload.get("preferred")):
             k = watch_key(o["origin"], o["destination"], o["depart_date"], o["return_date"])
             if k in keys:
                 for e in entries:

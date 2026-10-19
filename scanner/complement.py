@@ -15,6 +15,7 @@ import logging
 from typing import Any, Callable
 
 from . import storage
+from . import preferred as pref_mod
 from .config import Config
 from .watchlist import load_watchlist, normalize_entry, watch_key
 
@@ -29,10 +30,12 @@ def plan_key(q: dict[str, Any]) -> str:
 
 
 def select_queries(latest: dict[str, Any], *, today: dt.date, horizon: dt.date,
-                   watched: set[str] | None = None, max_queries: int = 400) -> dict[str, Reason]:
+                   watched: set[str] | None = None, max_queries: int = 400,
+                   preferred: dict[str, Any] | None = None) -> dict[str, Reason]:
     """Vrátí {query_key: důvod} pro dotazy, které má smysl zopakovat (seřazeno podle priority)."""
     watched = watched or set()
     picked: list[tuple[int, str, Reason]] = []
+    pref_keys = set(pref_mod.recheck_keys(latest, preferred))
     for q in latest.get("queries", []):
         key = plan_key(q)
         wk = key
@@ -44,6 +47,8 @@ def select_queries(latest: dict[str, Any], *, today: dt.date, horizon: dt.date,
         prio = 9
         if wk in watched:
             reason, prio = "sledovaný let", 0
+        elif key in pref_keys:
+            reason, prio = "preferovaná aerolinka, nejlevnější termíny", 1
         elif st == "error" or (st or "").startswith("skipped"):
             reason, prio = f"ranní běh: {st}", 1
         elif q.get("stale"):
@@ -121,7 +126,8 @@ def run(cfg: Config, *, scan_fn: Callable[..., dict[str, Any]], finalize_fn: Cal
     horizon = booking_horizon(cfg, today)
     watched = {watch_key(w["origin"], w["destination"], w["depart_date"], w["return_date"])
                for w in (normalize_entry(x) for x in load_watchlist().get("watch", [])) if w}
-    sel = select_queries(latest, today=today, horizon=horizon, watched=watched, max_queries=max_queries)
+    sel = select_queries(latest, today=today, horizon=horizon, watched=watched, max_queries=max_queries,
+                         preferred=cfg.raw.get("preferred"))
     by_reason: dict[str, int] = {}
     for r in sel.values():
         by_reason[r.split(" (")[0]] = by_reason.get(r.split(" (")[0], 0) + 1

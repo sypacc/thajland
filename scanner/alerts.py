@@ -27,6 +27,8 @@ KIND_LABEL = {
     "watch_low": "sledovaný let na minimu",
     "watch_up": "sledovaný let zdražil",
     "watch_gone": "sledovaný let zmizel z nabídky",
+    "pref_target": "preferovaná aerolinka pod hranicí",
+    "pref_low": "preferovaná aerolinka na novém minimu",
 }
 
 
@@ -122,6 +124,30 @@ def detect(payload: dict[str, Any], history: list[dict[str, Any]], cfg: dict[str
                 add("anomaly", o,
                     f"cena {p} je {(1 - p / med) * 100:.0f} % pod mediánem {int(med)} z {len(hist)} běhů tohoto termínu",
                     "high", median_price=int(med), history_days=len(hist))
+    # 3b) preferovaná aerolinka (config `preferred`): vlastní hranice + nové minimum na trase
+    pref = payload.get("preferred") or {}
+    pref_air = set(pref.get("airlines") or [])
+    pref_target = pref.get("target_price")
+    if pref_air:
+        pref_best: dict[str, dict[str, Any]] = {}
+        for o in payload.get("offers", []):
+            if o.get("stale") or not o.get("airlines") or not all(a in pref_air for a in o["airlines"]):
+                continue
+            k = _qkey(o)
+            if k not in pref_best or o["price"] < pref_best[k]["price"]:
+                pref_best[k] = o
+        name = ", ".join(sorted(pref_air))
+        for k, o in pref_best.items():
+            best_by_q.setdefault(k, o)
+            if pref_target and o["price"] <= float(pref_target):
+                add("pref_target", o, f"{name} za {o['price']} Kč, pod tvou hranicí {int(pref_target)} pro preferovanou aerolinku", "high")
+        for rk, info in (pref.get("new_low_routes") or {}).items():
+            cand = [o for o in pref_best.values() if f"{o['origin']}-{o['destination']}" == rk]
+            if cand:
+                o = min(cand, key=lambda x: x["price"])
+                add("pref_low", o, f"{name}: nejnižší cena na trase {rk} dosud ({o['price']} Kč, předtím {info['previous']})", "high",
+                    previous_low=info["previous"])
+
     route_best: dict[str, dict[str, Any]] = {}
     for o in best_by_q.values():
         rk = f"{o['origin']}-{o['destination']}"

@@ -55,6 +55,23 @@ které se používá i v hlášeních. Ostatní nabídky jsou ve sbalené část
 Termíny na hranici prodejního okna (~330 dní dopředu) se skenují hned po sledovaných letech, takže nově
 otevřené zářijové dny se objeví v den otevření a dostanou hlášení „nově v prodeji“.
 
+## Preferovaná aerolinka (Qatar Airways)
+
+V `config.yaml → preferred` je jedna aerolinka s prioritou napříč systémem (teď Qatar Airways):
+
+- **Vlastní hranice pro hlášení** `preferred.target_price` (14 000 Kč/os) nezávisle na obecné hranici 15 000:
+  hlášení `pref_target`, jakmile pod ni Qatar klesne. Hlášení `pref_low` přijde při každém **novém minimu
+  Qataru na trase** (minima se pamatují v `data/pref.json`), takže pokles vidíš první den, kdy nastane.
+- **Rezervovaná místa v tipech** (`reserve_tips: 2`): nejlevnější Qatar na každou destinaci je vždy mezi
+  automatickými tipy a tím pádem se skenuje přednostně a má vlastní historii ceny.
+- **Přednostní znovuověření** (`recheck_top: 8`): doplňkový sken z Claude rutiny zopakuje 8 nejlevnějších
+  Qatar termínů i když ranní běh proběhl, tj. cena se měří dvakrát denně.
+- **Dashboard**: karta „Qatar Airways · nejlevněji“ ve verdiktu (srpen vs. září, dosavadní minimum, cíl),
+  záložka „★ Qatar Airways“ v Prozkoumat (výchozí) a řádek v Postřezích.
+- **Skóre**: bonus −1 800 Kč, aby Qatar vyhrával poměr cena/výkon při malém cenovém rozdílu.
+
+Změna aerolinky = upravit `preferred.airlines`; víc aerolinek najednou je možné (musí letět celou cestu).
+
 ## Hlášení dealů (alerty)
 
 Po každém běhu se nabídky porovnají s historií a vzniknou hlášení (`data/alerts.json`, sekce „Hlášení“ v dashboardu):
