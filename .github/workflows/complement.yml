@@ -1,0 +1,147 @@
+name: Doplňkový sken (druhé měření)
+
+# Druhý průchod po ranním skenu: zopakuje jen dotazy, na které ranní běh nedosáhl (selhané, prázdné
+# v prodejním okně, převzaté ze staršího běhu), sledované lety, hranici prodejního okna a nejlevnější
+# termíny preferované aerolinky (Qatar), a výsledek konzervativně sloučí s ranním během.
+on:
+  schedule:
+    # Denně v 07:24 UTC (09:24 letního / 08:24 zimního času v ČR), cca 3 h po ranním skenu (04:17 UTC).
+    - cron: "24 7 * * *"
+  workflow_dispatch:
+    inputs:
+      time_budget:
+        description: "Časový rozpočet dotazů v minutách"
+        required: false
+        default: "40"
+      dry_run:
+        description: "Jen vypsat, co by se opakovalo (true/false)"
+        required: false
+        default: "false"
+
+concurrency:
+  group: scan
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  complement:
+    name: Doplnit a sjednotit
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Instalace závislostí
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt playwright pytest
+          python -m playwright install --with-deps chromium
+      - name: Testy
+        run: python -m pytest -q tests
+      - name: Co se bude opakovat
+        run: python -m scanner.run --complement-dry-run
+      - name: Doplňkový sken a sloučení
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          PYTHONUNBUFFERED: "1"
+          THAJLAND_DEBUG_DIR: debug
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+        run: python -m scanner.run --complement --time-budget "${{ github.event.inputs.time_budget || '40' }}"
+      - name: Shrnutí běhu
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          p = pathlib.Path("data/latest.json")
+          if not p.exists():
+              print("Žádná data."); raise SystemExit
+          d = json.loads(p.read_text())
+          c = d.get("complement")
+          print(f"## Doplňkový sken {d['day']}\n")
+          if not c:
+              print("Nic se neměnilo (ranní běh pokryl všechno, nebo sken nic lepšího nenašel).")
+          else:
+              print(f"- vybráno {c['selected']} dotazů ({', '.join(f'{k}: {v}' for k, v in c['reasons'].items())})")
+              print(f"- zopakováno **{c['reran']}**, nahrazeno **{c['replaced']}** (nově s nabídkou {c['newly_ok']}, levněji {c['improved']}), ponecháno {c['kept']}, trvání {c['duration_s']} s")
+          al = d.get("alerts_today") or []
+          print(f"\n### Hlášení: {len(al)}\n")
+          for a in al[:15]:
+              print(f"- **{a['price']} {a['currency']}/os** {a['origin']}→{a['destination']} {a['depart_date']}→{a['return_date']} · {', '.join(a['airlines'])} · {a['kind_label']} – {a['reason']}")
+          pr = d.get("preferred") or {}
+          if pr.get("overall"):
+              o = pr["overall"]
+              print(f"\n### {', '.join(pr['airlines'])}: nejlevněji {o['price']} Kč/os · {o['origin']}→{o['destination']} {o['depart_date']}→{o['return_date']}")
+          PY
+      - name: Commit dat
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          git config user.name "thajland-bot"
+          git config user.email "thajland-bot@users.noreply.github.com"
+          git add -A data watchlist.yaml
+          if git diff --cached --quiet; then
+            echo "Žádná změna dat."
+            echo "CHANGED=0" >> "$GITHUB_ENV"
+          else
+            git commit -m "data: doplňkový sken $(date -u +%Y-%m-%d)"
+            for i in 1 2 3 4; do
+              git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && break
+              echo "push selhal (pokus $i), zkouším znovu"; sleep $((i * 5))
+            done
+            git fetch origin "${GITHUB_REF_NAME}" && git diff --quiet HEAD "origin/${GITHUB_REF_NAME}" -- data || { echo "::error::Data se nepodařilo pushnout"; exit 1; }
+            echo "CHANGED=1" >> "$GITHUB_ENV"
+          fi
+      - uses: actions/setup-node@v4
+        if: env.CHANGED == '1'
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Sestavit web (React/Vite)
+        if: env.CHANGED == '1'
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Připravit publikaci
+        if: env.CHANGED == '1'
+        run: |
+          rm -rf _site && mkdir -p _site
+          cp -r web/dist/. _site/
+          mkdir -p _site/data && cp data/*.json _site/data/ 2>/dev/null || true
+          touch _site/.nojekyll
+      - name: Publikovat dashboard (větev gh-pages)
+        if: env.CHANGED == '1'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site
+          publish_branch: gh-pages
+          force_orphan: true
+          user_name: thajland-bot
+          user_email: thajland-bot@users.noreply.github.com
+          commit_message: "dashboard (doplňkový sken) ${{ github.run_number }}"
+      - name: Ladicí výstupy
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-complement-${{ github.run_number }}
+          path: debug/
+          if-no-files-found: ignore
+          retention-days: 7
