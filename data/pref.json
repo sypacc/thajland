@@ -1,0 +1,29 @@
+{
+ "routes": {
+  "PRG-BKK": {
+   "price": 15295,
+   "day": "2026-10-19",
+   "depart_date": "2027-08-25",
+   "return_date": "2027-09-09",
+   "route": "PRG→DOH→BKK"
+  },
+  "VIE-BKK": {
+   "price": 17411,
+   "day": "2026-10-19",
+   "depart_date": "2027-08-30",
+   "return_date": "2027-09-13",
+   "route": "VIE→DOH→BKK"
+  },
+  "VIE-HKT": {
+   "price": 17338,
+   "day": "2026-10-19",
+   "depart_date": "2027-08-30",
+   "return_date": "2027-09-13",
+   "route": "VIE→DOH→HKT"
+  }
+ },
+ "airlines": [
+  "Qatar Airways"
+ ],
+ "updated": "2026-10-19"
+}
