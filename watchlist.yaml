@@ -81,12 +81,25 @@ watch:
   destination: HKT
   depart_date: '2027-08-30'
   return_date: '2027-09-13'
-  auto: true
-  added: '2026-10-19'
-  last_top: '2026-10-19'
-  price_at_add: 17338
   itin:
     airlines:
     - Qatar Airways
     route: VIE→DOH→HKT
     dep_time: 09:55
+  added: '2026-10-19'
+  auto: true
+  last_top: '2026-10-19'
+  price_at_add: 17338
+- origin: PRG
+  destination: BKK
+  depart_date: '2027-08-26'
+  return_date: '2027-09-09'
+  auto: true
+  added: '2026-10-19'
+  last_top: '2026-10-19'
+  price_at_add: 15295
+  itin:
+    airlines:
+    - Qatar Airways
+    route: PRG→DOH→BKK
+    dep_time: '15:50'
