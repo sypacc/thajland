@@ -70,6 +70,12 @@ V `config.yaml → preferred` je jedna aerolinka s prioritou napříč systémem
   záložka „★ Qatar Airways“ v Prozkoumat (výchozí) a řádek v Postřezích.
 - **Skóre**: bonus −1 800 Kč, aby Qatar vyhrával poměr cena/výkon při malém cenovém rozdílu.
 
+**Prémiová skupina** (`preferred.peers`: Emirates, EVA Air, Singapore Airlines, Cathay Pacific, Etihad) = aerolinky
+stejné nebo lepší úrovně než Qatar. Pro každou se pamatuje minimum po trasách (`data/pref.json → airlines_min`),
+hlásí se `peer_target` (pod `peer_target_price`, 14 000 Kč) a `peer_miracle` = **zázračná sleva**: cena aspoň
+o `peer_drop_pct` % (20 %) pod dosavadním minimem té aerolinky na trase. Jejich nejlevnější termíny se znovu ověřují
+v doplňkovém skenu (`peer_recheck_top` na aerolinku) a na dashboardu mají záložku „Prémiové“ a řádek v Postřezích.
+
 Změna aerolinky = upravit `preferred.airlines`; víc aerolinek najednou je možné (musí letět celou cestu).
 
 ## Hlášení dealů (alerty)

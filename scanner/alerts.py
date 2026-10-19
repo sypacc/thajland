@@ -29,6 +29,8 @@ KIND_LABEL = {
     "watch_gone": "sledovaný let zmizel z nabídky",
     "pref_target": "preferovaná aerolinka pod hranicí",
     "pref_low": "preferovaná aerolinka na novém minimu",
+    "peer_target": "prémiová aerolinka pod hranicí",
+    "peer_miracle": "zázračná sleva prémiové aerolinky",
 }
 
 
@@ -147,6 +149,28 @@ def detect(payload: dict[str, Any], history: list[dict[str, Any]], cfg: dict[str
                 o = min(cand, key=lambda x: x["price"])
                 add("pref_low", o, f"{name}: nejnižší cena na trase {rk} dosud ({o['price']} Kč, předtím {info['previous']})", "high",
                     previous_low=info["previous"])
+
+    # 3c) prémiové aerolinky (config preferred.peers): hranice + zázračná sleva proti dosavadnímu minimu
+    peers = pref.get("peers") or {}
+    peer_target = pref.get("peer_target_price")
+    for air, info in peers.items():
+        air_best: dict[str, dict[str, Any]] = {}
+        for o in payload.get("offers", []):
+            if o.get("stale") or not o.get("airlines") or not all(a == air for a in o["airlines"]):
+                continue
+            k = _qkey(o)
+            if k not in air_best or o["price"] < air_best[k]["price"]:
+                air_best[k] = o
+        for k, o in air_best.items():
+            best_by_q.setdefault(k, o)
+            if peer_target and o["price"] <= float(peer_target):
+                add("peer_target", o, f"{air} za {o['price']} Kč, pod hranicí {int(peer_target)} pro prémiové aerolinky", "high")
+        for rk, m in (info.get("miracles") or {}).items():
+            cand = [o for o in air_best.values() if f"{o['origin']}-{o['destination']}" == rk]
+            if cand:
+                o = min(cand, key=lambda x: x["price"])
+                add("peer_miracle", o, f"{air}: {o['price']} Kč je o {m['drop_pct']} % pod dosavadním minimem {m['previous']} na trase {rk}", "high",
+                    previous_low=m["previous"], drop_pct=m["drop_pct"])
 
     route_best: dict[str, dict[str, Any]] = {}
     for o in best_by_q.values():

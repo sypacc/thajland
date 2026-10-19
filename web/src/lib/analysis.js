@@ -38,7 +38,10 @@ export function buildModel(latest, series, alerts) {
   const isPref = (o) => !!prefCfg && o.airlines && o.airlines.length > 0 && o.airlines.every((a) => prefCfg.airlines.includes(a));
   const prefOffers = prefCfg ? fresh.filter(isPref) : [];
   const minBy = (fn) => { const m = {}; for (const o of prefOffers) { const k = fn(o); if (!m[k] || o.price < m[k].price) m[k] = o; } return m; };
-  const pref = prefCfg ? { cfg: prefCfg, name: prefCfg.airlines.join(", "), offers: prefOffers, isPref,
+  const peerNames = (prefCfg && prefCfg.peers) || [];
+  const isPeer = (o) => o.airlines && o.airlines.length > 0 && peerNames.some((p) => o.airlines.every((a) => a === p));
+  const peers = peerNames.map((name) => { const mine = fresh.filter((o) => o.airlines.length && o.airlines.every((a) => a === name)).sort((a, b) => a.price - b.price); const prev = ((latest.preferred && latest.preferred.peers && latest.preferred.peers[name]) || {}).prev_min_by_route || {}; const prevAll = Object.values(prev).map((x) => x.price).filter((x) => x != null); return { name, best: mine[0] || null, count: mine.length, prevMin: prevAll.length ? Math.min(...prevAll) : null, miracles: ((latest.preferred && latest.preferred.peers && latest.preferred.peers[name]) || {}).miracles || {} }; });
+  const pref = prefCfg ? { cfg: prefCfg, name: prefCfg.airlines.join(", "), offers: prefOffers, isPref, isPeer, peers, isPremium: (o) => isPref(o) || isPeer(o),
     overall: prefOffers.length ? [...prefOffers].sort((a, b) => a.price - b.price)[0] : null,
     byRoute: minBy((o) => o._rk), byMonth: minBy((o) => o._month), byDest: minBy((o) => o.destination),
     prev: (latest.preferred && latest.preferred.prev_min_by_route) || {}, newLow: (latest.preferred && latest.preferred.new_low_routes) || {} } : null;
@@ -91,6 +94,10 @@ export function insights(M) {
     const prevAll = Object.values(P.prev).map((x) => x.price).filter((x) => x != null); const prevMin = prevAll.length ? Math.min(...prevAll) : null;
     const tgt = P.cfg.target_price;
     out.unshift(`<strong>${P.name} (preferovaná):</strong> nejlevněji ${czk(o.price)}/os · ${routeName(o._rk)} · ${dshort(o.depart_date)}–${dshort(o.return_date)}; ${months}${prevMin != null ? (o.price < prevMin ? ` · <strong>nové minimum</strong> (dosud ${czk(prevMin)})` : ` · dosavadní minimum ${czk(prevMin)}`) : ""}${tgt ? ` · hlášení přijde pod ${czk(tgt)}` : ""}.`);
+  }
+  if (M.pref && M.pref.peers.length) {
+    const P = M.pref; const have = P.peers.filter((p) => p.best); const miss = P.peers.filter((p) => !p.best).map((p) => p.name);
+    if (have.length) out.splice(1, 0, `<strong>Prémiové aerolinky:</strong> ${have.sort((a, b) => a.best.price - b.best.price).map((p) => `${p.name} od <strong>${czk(p.best.price)}</strong> (${routeName(p.best._rk)}, ${dshort(p.best.depart_date)}${p.prevMin != null && p.best.price < p.prevMin ? ", nové minimum" : ""})`).join(" · ")}${miss.length ? ` · bez nabídky: ${miss.join(", ")}` : ""}${P.cfg.peer_target_price ? ` · hlášení pod ${czk(P.cfg.peer_target_price)} nebo při pádu o ${P.cfg.peer_drop_pct || 20} % pod dosavadní minimum.` : "."}`);
   }
   const direct = fresh.filter((o) => o.stops === 0);
   if (direct.length) out.push(`Přímý let existuje od <strong>${czk(Math.min(...direct.map((o) => o.price)))}</strong> (${[...new Set(direct.map((o) => o.airlines.join("/")))].join(", ")}).`);

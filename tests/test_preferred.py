@@ -53,3 +53,24 @@ def test_alerts_pref_kinds():
     kinds = {a["offer_id"]: a["kinds"] for a in out}
     assert "pref_target" in kinds["a"] and "pref_low" in kinds["b"]
     assert all(a["severity"] == "high" for a in out)
+
+
+PREF2 = dict(PREF, peers=["Emirates", "EVA Air"], peer_target_price=14000, peer_drop_pct=20, peer_recheck_top=2)
+
+
+def test_peer_summary_miracle_and_alerts():
+    offers = [_o("PRG", "BKK", "2027-08-10", "2027-08-24", 15000, ["Emirates"], id_="e1"),
+              _o("VIE", "BKK", "2027-08-12", "2027-08-26", 13500, ["EVA Air"], id_="v1"),
+              _o("VIE", "HKT", "2027-08-13", "2027-08-27", 17000, ["Emirates"], id_="e2")]
+    prev = {"airlines_min": {"Emirates": {"PRG-BKK": {"price": 19000}, "VIE-HKT": {"price": 17500}}}}
+    s = preferred.summary(offers, PREF2, prev)
+    em = s["peers"]["Emirates"]
+    assert em["overall"]["price"] == 15000 and em["miracles"] == {"PRG-BKK": {"price": 15000, "previous": 19000, "drop_pct": 21}}
+    assert s["peers"]["EVA Air"]["overall"]["price"] == 13500 and not s["peers"]["EVA Air"]["miracles"]
+    m = preferred.update_minima(prev, s, "2026-10-19")
+    assert m["airlines_min"]["Emirates"]["PRG-BKK"]["price"] == 15000 and m["airlines_min"]["EVA Air"]["VIE-BKK"]["price"] == 13500
+    assert m["airlines_min"]["Emirates"]["VIE-HKT"]["price"] == 17000
+    out = alerts.detect({"day": "2026-10-19", "offers": offers, "preferred": s, "watch": []}, [], {"target_price": 10000, "max_per_run": 8}, [])
+    kinds = {a["offer_id"]: a["kinds"] for a in out}
+    assert "peer_miracle" in kinds["e1"] and "peer_target" in kinds["v1"] and "e2" not in kinds
+    assert preferred.peer_recheck_keys({"offers": offers}, PREF2) == ["PRG|BKK|2027-08-10|2027-08-24", "VIE|HKT|2027-08-13|2027-08-27", "VIE|BKK|2027-08-12|2027-08-26"]

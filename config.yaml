@@ -110,6 +110,13 @@ preferred:
   reserve_tips: 2
   # Kolik nejlevnějších termínů preferované aerolinky znovu ověřit v doplňkovém skenu (být první, kdo pokles uvidí).
   recheck_top: 8
+  # Prémiová skupina: aerolinky stejné nebo lepší úrovně než preferovaná. Sledují se jejich minima po trasách,
+  # hlásí se pád pod peer_target_price a „zázračná sleva“ = pokles o peer_drop_pct % a víc proti dosavadnímu
+  # minimu té aerolinky na trase. Nejlevnější termíny se znovu ověřují v doplňkovém skenu (peer_recheck_top).
+  peers: ["Emirates", "EVA Air", "Singapore Airlines", "Cathay Pacific", "Etihad"]
+  peer_target_price: 14000
+  peer_drop_pct: 20
+  peer_recheck_top: 4
 
 # Hlášení (alerty) – kdy považovat nabídku za abnormálně nízkou / zajímavý deal.
 alerts:

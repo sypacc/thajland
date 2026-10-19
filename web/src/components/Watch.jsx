@@ -30,7 +30,7 @@ export function DealCard({ o, i, M, label }) {
   );
 }
 
-const TABS = [["pref", "__PREF__", "Jen lety preferované aerolinky (config.preferred), seřazené podle ceny: nejlevnější termíny, které má smysl hlídat."], ["best", "Nejlepší poměr", "Skóre = cena + penalizace za dlouhou cestu, přestupy a horší aerolinky. Čím nižší, tím lepší."], ["cheap", "Nejlevnější", "Čistě podle ceny za osobu, bez ohledu na délku cesty a přestupy."], ["fast", "Nejrychlejší", "Nejkratší cesta tam. Cena je druhotná."], ["direct", "Přímé / 1 přestup", "Jen přímé lety a lety s jedním přestupem, řazené podle skóre."]];
+const TABS = [["pref", "__PREF__", "Jen lety preferované aerolinky (config.preferred), seřazené podle ceny: nejlevnější termíny, které má smysl hlídat."], ["premium", "Prémiové", "Preferovaná aerolinka plus prémiová skupina (Emirates, EVA Air, Singapore Airlines, Cathay Pacific, Etihad), seřazené podle ceny. Pro tyhle chodí hlášení o zázračné slevě."], ["best", "Nejlepší poměr", "Skóre = cena + penalizace za dlouhou cestu, přestupy a horší aerolinky. Čím nižší, tím lepší."], ["cheap", "Nejlevnější", "Čistě podle ceny za osobu, bez ohledu na délku cesty a přestupy."], ["fast", "Nejrychlejší", "Nejkratší cesta tam. Cena je druhotná."], ["direct", "Přímé / 1 přestup", "Jen přímé lety a lety s jedním přestupem, řazené podle skóre."]];
 const SORTS = [["rec", "doporučené"], ["price", "nejlevnější"], ["dur", "nejkratší cesta"], ["dep", "nejbližší odlet"], ["delta", "největší zlevnění"]];
 
 function useChanges(items, M) {
@@ -80,8 +80,9 @@ export default function Watch({ M }) {
   }, [view, sort, tips, favorites, all]);
   const pool = M.fresh.filter((o) => o.score != null);
   const list = useMemo(() => {
-    let l = tab === "pref" ? sortBy(pool.filter((o) => M.pref && M.pref.isPref(o)), "price") : tab === "cheap" ? sortBy(pool, "price") : tab === "fast" ? sortBy(pool, "duration_min") : tab === "direct" ? sortBy(pool.filter((o) => o.stops <= 1), "score") : sortBy(pool, "score");
-    const seen = new Set(); return l.filter((o) => { const k = `${o.depart_date}|${o.price}|${o.airlines.join()}|${o.route}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, tab === "pref" ? 9 : 6);
+    let l = tab === "pref" ? sortBy(pool.filter((o) => M.pref && M.pref.isPref(o)), "price") : tab === "premium" ? sortBy(pool.filter((o) => M.pref && M.pref.isPremium(o)), "price") : tab === "cheap" ? sortBy(pool, "price") : tab === "fast" ? sortBy(pool, "duration_min") : tab === "direct" ? sortBy(pool.filter((o) => o.stops <= 1), "score") : sortBy(pool, "score");
+    if (tab === "premium") { const perAir = {}; l = l.filter((o) => { const a = o.airlines.join(); perAir[a] = (perAir[a] || 0) + 1; return perAir[a] <= 3; }); }
+    const seen = new Set(); return l.filter((o) => { const k = `${o.depart_date}|${o.price}|${o.airlines.join()}|${o.route}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, tab === "pref" || tab === "premium" ? 9 : 6);
   }, [tab, pool]);
   const bestTip = tips.find((w) => w.current);
   const addBest = () => { const c = bestTip && bestTip.current; if (c) toggleFavorite({ ...c, origin: bestTip.origin, destination: bestTip.destination, depart_date: bestTip.depart_date, return_date: bestTip.return_date }); };
@@ -132,7 +133,7 @@ export default function Watch({ M }) {
 
       <details id="deals" className="explore">
         <summary><strong>Prozkoumat další nabídky</strong> <span className="muted small">· nejlevnější, nejrychlejší, max 1 přestup · odtud přidáš oblíbené</span></summary>
-        <div className="panel-head" style={{ marginTop: 10 }}><div className="tabs" role="tablist">{TABS.filter(([k]) => k !== "pref" || M.pref).map(([k, t]) => <button key={k} className={"tab" + (k === "pref" ? " pref" : "")} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{k === "pref" ? `★ ${M.pref.name}` : t}</button>)}</div></div>
+        <div className="panel-head" style={{ marginTop: 10 }}><div className="tabs" role="tablist">{TABS.filter(([k]) => (k !== "pref" && k !== "premium") || M.pref).map(([k, t]) => <button key={k} className={"tab" + (k === "pref" ? " pref" : "")} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{k === "pref" ? `★ ${M.pref.name}` : t}</button>)}</div></div>
         <p className="muted small">{TABS.find((t) => t[0] === tab)[2]}</p>
         <div className="cards">{list.length ? list.map((o, i) => <DealCard key={o.id + i} o={o} i={i} M={M} />) : <div className="empty">Žádné nabídky v posledním skenu.</div>}</div>
       </details>

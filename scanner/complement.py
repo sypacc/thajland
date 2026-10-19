@@ -36,6 +36,7 @@ def select_queries(latest: dict[str, Any], *, today: dt.date, horizon: dt.date,
     watched = watched or set()
     picked: list[tuple[int, str, Reason]] = []
     pref_keys = set(pref_mod.recheck_keys(latest, preferred))
+    peer_keys = set(pref_mod.peer_recheck_keys(latest, preferred)) - pref_keys
     for q in latest.get("queries", []):
         key = plan_key(q)
         wk = key
@@ -49,6 +50,8 @@ def select_queries(latest: dict[str, Any], *, today: dt.date, horizon: dt.date,
             reason, prio = "sledovaný let", 0
         elif key in pref_keys:
             reason, prio = "preferovaná aerolinka, nejlevnější termíny", 1
+        elif key in peer_keys:
+            reason, prio = "prémiové aerolinky, nejlevnější termíny", 1
         elif st == "error" or (st or "").startswith("skipped"):
             reason, prio = f"ranní běh: {st}", 1
         elif q.get("stale"):
