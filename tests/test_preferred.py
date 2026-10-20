@@ -19,6 +19,8 @@ def test_summary_and_new_low():
               _o("PRG", "BKK", "2027-08-11", "2027-08-25", 12000, ["LOT"])]
     s = preferred.summary(offers, PREF, {"routes": {"PRG-BKK": {"price": 15295}}})
     assert s["overall"]["price"] == 15000 and set(s["min_by_route"]) == {"PRG-BKK", "VIE-HKT"}
+    # pokles o pár korun není nové minimum
+    assert not preferred.summary(offers, PREF, {"routes": {"PRG-BKK": {"price": 15100}}})["new_low_routes"]
     assert s["min_by_month"]["08"]["price"] == 15000 and s["min_by_month"]["09"]["price"] == 15800
     assert s["new_low_routes"] == {"PRG-BKK": {"price": 15000, "previous": 15295}}
     m = preferred.update_minima({"routes": {"PRG-BKK": {"price": 15295}}}, s, "2026-10-19")
@@ -47,7 +49,7 @@ def test_recheck_keys_cheapest_pref_dates():
 def test_alerts_pref_kinds():
     offers = [_o("PRG", "BKK", "2027-08-10", "2027-08-24", 13900, ["Qatar Airways"], id_="a"),
               _o("VIE", "HKT", "2027-09-02", "2027-09-16", 15100, ["Qatar Airways"], id_="b")]
-    pref = preferred.summary(offers, PREF, {"routes": {"VIE-HKT": {"price": 15300}}})
+    pref = preferred.summary(offers, PREF, {"routes": {"VIE-HKT": {"price": 15400}}})
     payload = {"day": "2026-10-19", "offers": offers, "preferred": pref, "watch": []}
     out = alerts.detect(payload, [], {"target_price": 12000, "max_per_run": 8}, [])
     kinds = {a["offer_id"]: a["kinds"] for a in out}
@@ -74,3 +76,13 @@ def test_peer_summary_miracle_and_alerts():
     kinds = {a["offer_id"]: a["kinds"] for a in out}
     assert "peer_miracle" in kinds["e1"] and "peer_target" in kinds["v1"] and "e2" not in kinds
     assert preferred.peer_recheck_keys({"offers": offers}, PREF2) == ["PRG|BKK|2027-08-10|2027-08-24", "VIE|HKT|2027-08-13|2027-08-27", "VIE|BKK|2027-08-12|2027-08-26"]
+
+
+def test_pref_alert_sticks_to_preferred_offer_not_cheaper_rival():
+    # stejný termín: Finnair levnější než Qatar; hlášení o Qataru musí nést Qatar
+    offers = [_o("VIE", "BKK", "2027-09-01", "2027-09-14", 15626, ["Finnair"], id_="f"),
+              _o("VIE", "BKK", "2027-09-01", "2027-09-14", 17000, ["Qatar Airways"], id_="q")]
+    pref = preferred.summary(offers, PREF, {"routes": {"VIE-BKK": {"price": 17411}}})
+    out = alerts.detect({"day": "2026-10-20", "offers": offers, "preferred": pref, "watch": []}, [], {"target_price": 10000, "max_per_run": 8}, [])
+    low = [a for a in out if "pref_low" in a["kinds"]]
+    assert len(low) == 1 and low[0]["airlines"] == ["Qatar Airways"] and low[0]["price"] == 17000

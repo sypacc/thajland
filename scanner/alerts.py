@@ -106,8 +106,11 @@ def detect(payload: dict[str, Any], history: list[dict[str, Any]], cfg: dict[str
     reasons: dict[str, list[tuple[str, str, str, dict[str, Any]]]] = {}
 
     def add(kind: str, o: dict[str, Any], reason: str, severity: str, **extra):
-        key = ("watch|" if kind.startswith("watch_") else "") + _qkey(o)
-        if kind.startswith("watch_"):
+        # sledované a preferované lety mají vlastní klíč, aby se hlášení nepřilepilo na levnější nabídku
+        # jiné aerolinky ve stejném termínu
+        prefix = "watch|" if kind.startswith("watch_") else ("pref|" if kind.startswith(("pref_", "peer_")) else "")
+        key = prefix + _qkey(o)
+        if prefix:
             best_by_q.setdefault(key, o)
         reasons.setdefault(key, []).append((kind, reason, severity, extra))
 
@@ -140,7 +143,6 @@ def detect(payload: dict[str, Any], history: list[dict[str, Any]], cfg: dict[str
                 pref_best[k] = o
         name = ", ".join(sorted(pref_air))
         for k, o in pref_best.items():
-            best_by_q.setdefault(k, o)
             if pref_target and o["price"] <= float(pref_target):
                 add("pref_target", o, f"{name} za {o['price']} Kč, pod tvou hranicí {int(pref_target)} pro preferovanou aerolinku", "high")
         for rk, info in (pref.get("new_low_routes") or {}).items():
@@ -162,7 +164,6 @@ def detect(payload: dict[str, Any], history: list[dict[str, Any]], cfg: dict[str
             if k not in air_best or o["price"] < air_best[k]["price"]:
                 air_best[k] = o
         for k, o in air_best.items():
-            best_by_q.setdefault(k, o)
             if peer_target and o["price"] <= float(peer_target):
                 add("peer_target", o, f"{air} za {o['price']} Kč, pod hranicí {int(peer_target)} pro prémiové aerolinky", "high")
         for rk, m in (info.get("miracles") or {}).items():
@@ -199,7 +200,7 @@ def detect(payload: dict[str, Any], history: list[dict[str, Any]], cfg: dict[str
 
     # 6) sledované lety: změna ceny proti minulému měření / minimu
     w_drop_pct = float(cfg.get("watch_drop_pct", 3)); w_drop_czk = float(cfg.get("watch_drop_czk", 400))
-    w_up_pct = float(cfg.get("watch_up_pct", 10))
+    w_up_pct = float(cfg.get("watch_up_pct", 10)); w_low_min = float(cfg.get("watch_low_min_czk", 250))
     for w in payload.get("watch", []) or []:
         cur = w.get("current"); prev = w.get("prev_price")
         if not cur:
@@ -220,7 +221,7 @@ def detect(payload: dict[str, Any], history: list[dict[str, Any]], cfg: dict[str
         p = cur["price"]
         if prev is not None and (prev - p >= w_drop_czk or (prev - p) / prev * 100 >= w_drop_pct):
             add("watch_drop", base, f"{label} zlevnil z {prev} na {p} Kč ({(prev - p) / prev * 100:.0f} %)", "high", previous_price=prev)
-        elif w.get("min_seen") is not None and p <= w["min_seen"] and len(w.get("history") or []) >= 3 and prev is not None and p < prev:
+        elif w.get("min_seen") is not None and p <= w["min_seen"] and len(w.get("history") or []) >= 3 and prev is not None and p <= prev - w_low_min:
             add("watch_low", base, f"{label} je na svém minimu ({p} Kč za {len(w['history'])} měření)", "high")
         if prev is not None and (p - prev) / prev * 100 >= w_up_pct:
             add("watch_up", base, f"{label} zdražil z {prev} na {p} Kč (+{(p - prev) / prev * 100:.0f} %)", "info", previous_price=prev)

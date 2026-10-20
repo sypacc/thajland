@@ -110,6 +110,8 @@ preferred:
   reserve_tips: 2
   # Kolik nejlevnějších termínů preferované aerolinky znovu ověřit v doplňkovém skenu (být první, kdo pokles uvidí).
   recheck_top: 8
+  # „Nové minimum“ hlásit až při poklesu aspoň o tolik Kč (kurzové kolísání o pár korun není zpráva).
+  new_low_min_drop_czk: 250
   # Prémiová skupina: aerolinky stejné nebo lepší úrovně než preferovaná. Sledují se jejich minima po trasách,
   # hlásí se pád pod peer_target_price a „zázračná sleva“ = pokles o peer_drop_pct % a víc proti dosavadnímu
   # minimu té aerolinky na trase. Nejlevnější termíny se znovu ověřují v doplňkovém skenu (peer_recheck_top).
@@ -136,6 +138,8 @@ alerts:
   # Stejný termín neopakovat dřív než za N dní, pokud cena neklesla o dalších X Kč.
   dedupe_days: 7
   dedupe_improve_czk: 500
+  # Sledovaný let „na minimu“ hlásit až při poklesu aspoň o tolik Kč proti minulému měření.
+  watch_low_min_czk: 250
   # Kanály: posílá se jen tam, kde jsou nastavené secrets (viz README).
   channels:
     github_issue: true   # issue v repu -> GitHub notifikace / e-mail (funguje bez nastavení)

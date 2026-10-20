@@ -3,7 +3,11 @@ name: Sken letenek do Thajska
 on:
   schedule:
     # Denně v 04:17 UTC (06:17 letního / 05:17 zimního času v ČR). GitHub cron = UTC.
+    # GitHub plánované běhy občas zpozdí o hodiny nebo vynechá, proto dvě zálohy; brána níže zajistí,
+    # že se plný sken za den udělá jen jednou.
     - cron: "17 4 * * *"
+    - cron: "47 6 * * *"
+    - cron: "17 9 * * *"
   workflow_dispatch:
     inputs:
       limit:
@@ -35,8 +39,28 @@ env:
   PYTHON_VERSION: "3.12"
 
 jobs:
+  gate:
+    name: Má dnes běžet?
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.g.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: g
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, pathlib, datetime, os
+          today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+          p = pathlib.Path("data/latest.json")
+          done = p.exists() and json.loads(p.read_text()).get("day") == today
+          manual = os.environ.get("GITHUB_EVENT_NAME") != "schedule"
+          print("run=" + ("true" if (manual or not done) else "false"))
+          print(("dnešní sken už existuje, záložní termín přeskočen" if done and not manual else "spouštím"), file=__import__("sys").stderr)
+          PY
   scan:
     name: Sken ${{ matrix.route }}
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 110
     strategy:
@@ -103,8 +127,9 @@ jobs:
 
   finalize:
     name: Sloučit, vyhodnotit, publikovat
-    needs: scan
-    if: always()
+    needs: [gate, scan]
+    if: always() && needs.gate.outputs.run == 'true'
+    
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:

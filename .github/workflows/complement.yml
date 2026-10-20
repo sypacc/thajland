@@ -6,7 +6,11 @@ name: Doplňkový sken (druhé měření)
 on:
   schedule:
     # Denně v 07:24 UTC (09:24 letního / 08:24 zimního času v ČR), cca 3 h po ranním skenu (04:17 UTC).
+    # Zálohy pro případ, že GitHub běh zpozdí/vynechá nebo ranní sken doběhne pozdě; brána níže pustí
+    # doplnění jen jednou denně a jen nad dnešními ranními daty.
     - cron: "24 7 * * *"
+    - cron: "54 10 * * *"
+    - cron: "24 14 * * *"
   workflow_dispatch:
     inputs:
       time_budget:
@@ -45,12 +49,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt playwright pytest
           python -m playwright install --with-deps chromium
+      - name: Má dnes běžet?
+        id: gate
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, pathlib, datetime, os
+          today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+          d = json.loads(pathlib.Path("data/latest.json").read_text()) if pathlib.Path("data/latest.json").exists() else {}
+          morning_today = d.get("day") == today
+          done = (d.get("complement") or {}).get("at", "")[:10] == today
+          manual = os.environ.get("GITHUB_EVENT_NAME") != "schedule"
+          run = manual or (morning_today and not done)
+          print("run=" + ("true" if run else "false"))
+          import sys; print(f"ranní data dnes: {morning_today}, doplnění dnes: {done}, ručně: {manual} -> {'spouštím' if run else 'přeskakuji'}", file=sys.stderr)
+          PY
       - name: Testy
+        if: steps.gate.outputs.run == 'true'
         run: python -m pytest -q tests
       - name: Co se bude opakovat
+        if: steps.gate.outputs.run == 'true'
         run: python -m scanner.run --complement-dry-run
       - name: Doplňkový sken a sloučení
-        if: github.event.inputs.dry_run != 'true'
+        if: steps.gate.outputs.run == 'true' && github.event.inputs.dry_run != 'true'
         env:
           PYTHONUNBUFFERED: "1"
           THAJLAND_DEBUG_DIR: debug
@@ -65,7 +85,7 @@ jobs:
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
         run: python -m scanner.run --complement --time-budget "${{ github.event.inputs.time_budget || '40' }}"
       - name: Shrnutí běhu
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         run: |
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json, pathlib
@@ -90,7 +110,7 @@ jobs:
               print(f"\n### {', '.join(pr['airlines'])}: nejlevněji {o['price']} Kč/os · {o['origin']}→{o['destination']} {o['depart_date']}→{o['return_date']}")
           PY
       - name: Commit dat
-        if: github.event.inputs.dry_run != 'true'
+        if: steps.gate.outputs.run == 'true' && github.event.inputs.dry_run != 'true'
         run: |
           git config user.name "thajland-bot"
           git config user.email "thajland-bot@users.noreply.github.com"

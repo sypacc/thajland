@@ -77,8 +77,9 @@ def summary(offers: list[dict[str, Any]], cfg_pref: dict[str, Any] | None,
             by_month[mk] = o
     prev = (prev_minima or {}).get("routes", {})
     overall = min(fresh, key=lambda o: o["price"]) if fresh else None
+    min_drop = float((cfg_pref or {}).get("new_low_min_drop_czk") or 250)
     new_low = {rk: {"price": o["price"], "previous": prev[rk]["price"]} for rk, o in by_route.items()
-               if rk in prev and prev[rk].get("price") is not None and o["price"] < prev[rk]["price"]}
+               if rk in prev and prev[rk].get("price") is not None and o["price"] <= prev[rk]["price"] - min_drop}
     return {
         "airlines": sorted(airlines), "target_price": (cfg_pref or {}).get("target_price"),
         "offers": len(fresh),
