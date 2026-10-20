@@ -107,12 +107,25 @@ watch:
   destination: HKT
   depart_date: '2027-08-24'
   return_date: '2027-09-08'
-  auto: true
-  added: '2026-10-20'
-  last_top: '2026-10-20'
-  price_at_add: 13524
   itin:
     airlines:
     - Scoot
     route: VIE→SIN→HKT
     dep_time: '12:10'
+  added: '2026-10-20'
+  auto: true
+  last_top: '2026-10-20'
+  price_at_add: 13524
+- origin: VIE
+  destination: HKT
+  depart_date: '2027-08-25'
+  return_date: '2027-09-09'
+  auto: true
+  added: '2026-10-20'
+  last_top: '2026-10-20'
+  price_at_add: 17331
+  itin:
+    airlines:
+    - Qatar Airways
+    route: VIE→DOH→HKT
+    dep_time: 09:55

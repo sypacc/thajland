@@ -3,22 +3,22 @@
   "PRG-BKK": {
    "price": 15287,
    "day": "2026-10-20",
-   "depart_date": "2027-08-26",
+   "depart_date": "2027-08-25",
    "return_date": "2027-09-09",
    "route": "PRG→DOH→BKK"
   },
   "VIE-BKK": {
    "price": 17404,
    "day": "2026-10-20",
-   "depart_date": "2027-09-01",
-   "return_date": "2027-09-14",
+   "depart_date": "2027-08-25",
+   "return_date": "2027-09-09",
    "route": "VIE→DOH→BKK"
   },
   "VIE-HKT": {
    "price": 17331,
    "day": "2026-10-20",
-   "depart_date": "2027-08-30",
-   "return_date": "2027-09-13",
+   "depart_date": "2027-08-25",
+   "return_date": "2027-09-09",
    "route": "VIE→DOH→HKT"
   }
  },
@@ -31,8 +31,8 @@
    "PRG-BKK": {
     "price": 17974,
     "day": "2026-10-20",
-    "depart_date": "2027-08-26",
-    "return_date": "2027-09-09",
+    "depart_date": "2027-08-24",
+    "return_date": "2027-09-06",
     "route": "PRG→DXB→BKK"
    },
    "VIE-BKK": {
@@ -54,8 +54,8 @@
    "VIE-BKK": {
     "price": 19055,
     "day": "2026-10-20",
-    "depart_date": "2027-08-31",
-    "return_date": "2027-09-14",
+    "depart_date": "2027-08-29",
+    "return_date": "2027-09-12",
     "route": "VIE→BKK"
    }
   },
@@ -70,10 +70,10 @@
     "route": "VIE→AUH→HKT"
    },
    "PRG-BKK": {
-    "price": 18905,
+    "price": 18880,
     "day": "2026-10-20",
-    "depart_date": "2027-08-21",
-    "return_date": "2027-09-04",
+    "depart_date": "2027-08-17",
+    "return_date": "2027-08-31",
     "route": "PRG→AUH→BKK"
    }
   }
