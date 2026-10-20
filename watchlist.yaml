@@ -21,7 +21,7 @@ watch:
     dep_time: '12:45'
   added: '2026-10-19'
   auto: true
-  last_top: '2026-10-19'
+  last_top: '2026-10-20'
   price_at_add: 12525
 - origin: PRG
   destination: BKK
@@ -48,7 +48,7 @@ watch:
     dep_time: '22:25'
   added: '2026-10-19'
   auto: true
-  last_top: '2026-10-19'
+  last_top: '2026-10-20'
   price_at_add: 14792
 - origin: VIE
   destination: HKT
@@ -88,18 +88,31 @@ watch:
     dep_time: 09:55
   added: '2026-10-19'
   auto: true
-  last_top: '2026-10-19'
+  last_top: '2026-10-20'
   price_at_add: 17338
 - origin: PRG
   destination: BKK
   depart_date: '2027-08-26'
   return_date: '2027-09-09'
-  auto: true
-  added: '2026-10-19'
-  last_top: '2026-10-19'
-  price_at_add: 15295
   itin:
     airlines:
     - Qatar Airways
     route: PRG→DOH→BKK
     dep_time: '15:50'
+  added: '2026-10-19'
+  auto: true
+  last_top: '2026-10-20'
+  price_at_add: 15295
+- origin: VIE
+  destination: HKT
+  depart_date: '2027-08-24'
+  return_date: '2027-09-08'
+  auto: true
+  added: '2026-10-20'
+  last_top: '2026-10-20'
+  price_at_add: 13524
+  itin:
+    airlines:
+    - Scoot
+    route: VIE→SIN→HKT
+    dep_time: '12:10'
