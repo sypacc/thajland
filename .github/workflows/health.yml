@@ -1,0 +1,103 @@
+name: Kontrola a samoopravа
+
+# Hlídač: několikrát denně ověří, že dnešní ranní sken i doplnění proběhly a že nasazený dashboard
+# odpovídá datům v repu. Co chybí, znovu spustí (workflow_dispatch přes GITHUB_TOKEN run vytvoří).
+# Když poslední sken selhal, založí issue „⚠️ provoz“, aby přišla notifikace. Staré issue s dealy zavírá.
+on:
+  schedule:
+    - cron: "40 12 * * *"   # 14:40 / 13:40 ČR – po ranním skenu i doplnění včetně záloh
+    - cron: "40 16 * * *"   # 18:40 / 17:40 ČR – poslední šance pro den
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+jobs:
+  health:
+    name: Zkontrolovat a dohnat
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      BRANCH: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stav dat a běhů
+        id: st
+        run: |
+          python - <<'PY'
+          import json, os, subprocess, datetime, urllib.request
+          today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+          out = {}
+          d = json.loads(open("data/latest.json").read())
+          out["repo_day"] = d.get("day"); out["repo_gen"] = d.get("generated_at")
+          out["complement_today"] = ((d.get("complement") or {}).get("at", "")[:10] == today)
+          try:
+              with urllib.request.urlopen(f"https://{os.environ['REPO'].split('/')[0]}.github.io/{os.environ['REPO'].split('/')[1]}/data/latest.json?nocache={datetime.datetime.now().timestamp()}", timeout=30) as r:
+                  p = json.loads(r.read())
+              out["pages_gen"] = p.get("generated_at")
+          except Exception as e:  # noqa: BLE001
+              out["pages_gen"] = f"ERR {e}"
+          def runs(wf, n=3):
+              j = subprocess.run(["gh", "api", f"repos/{os.environ['REPO']}/actions/workflows/{wf}/runs?per_page={n}"], capture_output=True, text=True).stdout
+              return [(x["created_at"], x["status"], x.get("conclusion"), x["event"]) for x in json.loads(j).get("workflow_runs", [])] if j else []
+          out["scan_runs"] = runs("scan.yml"); out["complement_runs"] = runs("complement.yml")
+          out["scan_running"] = any(s in ("in_progress", "queued") for _, s, _, _ in out["scan_runs"])
+          out["complement_running"] = any(s in ("in_progress", "queued") for _, s, _, _ in out["complement_runs"])
+          out["scan_failed_today"] = any(c == "failure" and t[:10] == today for t, _, c, _ in out["scan_runs"])
+          out["today"] = today
+          print(json.dumps(out, ensure_ascii=False, indent=1))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("state=" + json.dumps(out, ensure_ascii=False) + "\n")
+              f.write(f"need_scan={'true' if out['repo_day'] != today and not out['scan_running'] else 'false'}\n")
+              f.write(f"need_complement={'true' if out['repo_day'] == today and not out['complement_today'] and not out['complement_running'] and not out['scan_running'] else 'false'}\n")
+              stale_pages = (out["pages_gen"] != out["repo_gen"]) and not out["scan_running"] and not out["complement_running"]
+              f.write(f"need_publish={'true' if stale_pages else 'false'}\n")
+              f.write(f"scan_failed={'true' if out['scan_failed_today'] else 'false'}\n")
+          PY
+      - name: Dohnat ranní sken
+        if: steps.st.outputs.need_scan == 'true'
+        run: |
+          echo "Dnešní data chybí – spouštím scan.yml"
+          gh workflow run scan.yml --ref "$BRANCH"
+          echo "::warning::Ranní sken dnes neproběhl, spuštěn dodatečně kontrolou."
+      - name: Dohnat doplňkový sken
+        if: steps.st.outputs.need_complement == 'true'
+        run: |
+          echo "Doplnění dnes chybí – spouštím complement.yml"
+          gh workflow run complement.yml --ref "$BRANCH" -f time_budget=30
+          echo "::warning::Doplňkový sken dnes neproběhl, spuštěn dodatečně kontrolou."
+      - name: Znovu publikovat dashboard
+        if: steps.st.outputs.need_publish == 'true' && steps.st.outputs.need_scan != 'true' && steps.st.outputs.need_complement != 'true'
+        run: |
+          echo "Nasazený web neodpovídá datům v repu – spouštím publish.yml"
+          gh workflow run publish.yml --ref "$BRANCH"
+      - name: Issue při selhání skenu
+        if: steps.st.outputs.scan_failed == 'true'
+        run: |
+          TITLE="⚠️ Provoz: ranní sken $(date -u +%Y-%m-%d) selhal"
+          EXISTS=$(gh api "repos/$REPO/issues?state=open&labels=provoz&per_page=20" -q ".[] | select(.title==\"$TITLE\") | .number" | head -1)
+          if [ -z "$EXISTS" ]; then
+            gh api "repos/$REPO/labels" -f name=provoz -f color=d93f0b -f description="provozní problém skeneru" >/dev/null 2>&1 || true
+            BODY="Poslední plánovaný běh workflow *Sken letenek do Thajska* dnes skončil chybou. Kontrola ho zkusila spustit znovu (viz Actions). Pokud selže i opakování, podívej se do logu finalizačního jobu.\n\nStav: \`${{ steps.st.outputs.state }}\`"
+            gh api "repos/$REPO/issues" -f title="$TITLE" -f body="$(printf "$BODY")" -f "labels[]=provoz" >/dev/null && echo "issue založeno"
+          else
+            echo "issue #$EXISTS už existuje"
+          fi
+      - name: Zavřít staré issue s dealy (14+ dní)
+        run: |
+          CUTOFF=$(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          gh api "repos/$REPO/issues?state=open&labels=deal&per_page=100" -q ".[] | select(.created_at < \"$CUTOFF\") | .number" | while read -r n; do
+            gh api -X PATCH "repos/$REPO/issues/$n" -f state=closed -f state_reason=completed >/dev/null && echo "zavřeno #$n"
+          done
+      - name: Shrnutí
+        if: always()
+        run: |
+          {
+            echo "## Kontrola $(date -u +%Y-%m-%d\ %H:%M) UTC"
+            echo '```json'; echo '${{ steps.st.outputs.state }}' | python -m json.tool; echo '```'
+            echo "- dohnat sken: ${{ steps.st.outputs.need_scan }} · dohnat doplnění: ${{ steps.st.outputs.need_complement }} · znovu publikovat: ${{ steps.st.outputs.need_publish }} · sken dnes selhal: ${{ steps.st.outputs.scan_failed }}"
+          } >> "$GITHUB_STEP_SUMMARY"

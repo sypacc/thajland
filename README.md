@@ -147,6 +147,19 @@ Actions projde přes 280 dotazů denně. Rutina „Doplňkový sken letenek“ v
 někdy změnilo, stačí ji zapnout. Kiwi, Skyscanner, Pelikán a Letuška strojově číst nejdou odnikud, Azair
 hledá jen pár měsíců dopředu.
 
+## Provoz bez zásahu (co se hlídá samo)
+
+| Kdy (UTC) | Co | Když selže |
+|---|---|---|
+| 04:17 (+ zálohy 06:47, 09:17) | `scan.yml` – plný sken, hlášení, commit dat, publikace | brána pustí jen jeden běh denně; zálohy pokryjí zpoždění GitHubu |
+| 07:24 (+ zálohy 10:54, 14:24) | `complement.yml` – druhé měření vybraných dotazů, sloučení | běží jen nad dnešními ranními daty a jen jednou |
+| při pushi dat/webu | `publish.yml` – sestavení a nasazení dashboardu | – |
+| 12:40, 16:40 | `health.yml` – ověří dnešní sken, doplnění i shodu nasazeného webu s daty; co chybí, spustí znovu; při selhání skenu založí issue `provoz`; zavře issue s dealy starší 14 dní | – |
+| 12:40 ČR | Claude rutina „Denní souhrn letenek“ – přečte publikovaná data, zkusí dohnat chybějící běhy a pošle push souhrn (hlášení, Qatar, prémiové, sledované) | souhrn řekne, co chybí |
+
+GitHub plánované běhy chodí se zpožděním i o hodiny (19.–20. 10. o ~5 h), proto zálohy a brány. Rutina
+„Doplňkový sken letenek“ v Claude zůstává vypnutá: Google z cloudu Claude blokuje dotazy (429/captcha).
+
 ## Lokální spuštění
 
 ```bash
