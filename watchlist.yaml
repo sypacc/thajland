@@ -48,7 +48,7 @@ watch:
     dep_time: '22:25'
   added: '2026-10-19'
   auto: true
-  last_top: '2026-10-20'
+  last_top: '2026-10-21'
   price_at_add: 14792
 - origin: VIE
   destination: HKT
@@ -101,7 +101,7 @@ watch:
     dep_time: '15:50'
   added: '2026-10-19'
   auto: true
-  last_top: '2026-10-20'
+  last_top: '2026-10-21'
   price_at_add: 15295
 - origin: VIE
   destination: HKT
@@ -133,13 +133,13 @@ watch:
   destination: BKK
   depart_date: '2027-08-20'
   return_date: '2027-09-03'
-  auto: true
-  added: '2026-10-21'
-  last_top: '2026-10-21'
-  price_at_add: 15617
   itin:
     airlines:
     - SalamAir
     - Oman Air
     route: VIE→MCT→BKK
     dep_time: '22:25'
+  added: '2026-10-21'
+  auto: true
+  last_top: '2026-10-21'
+  price_at_add: 15617
