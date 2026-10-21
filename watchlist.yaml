@@ -21,7 +21,7 @@ watch:
     dep_time: '12:45'
   added: '2026-10-19'
   auto: true
-  last_top: '2026-10-20'
+  last_top: '2026-10-21'
   price_at_add: 12525
 - origin: PRG
   destination: BKK
@@ -114,18 +114,32 @@ watch:
     dep_time: '12:10'
   added: '2026-10-20'
   auto: true
-  last_top: '2026-10-20'
+  last_top: '2026-10-21'
   price_at_add: 13524
 - origin: VIE
   destination: HKT
   depart_date: '2027-08-25'
   return_date: '2027-09-09'
-  auto: true
-  added: '2026-10-20'
-  last_top: '2026-10-20'
-  price_at_add: 17331
   itin:
     airlines:
     - Qatar Airways
     route: VIE→DOH→HKT
     dep_time: 09:55
+  added: '2026-10-20'
+  auto: true
+  last_top: '2026-10-21'
+  price_at_add: 17331
+- origin: VIE
+  destination: BKK
+  depart_date: '2027-08-20'
+  return_date: '2027-09-03'
+  auto: true
+  added: '2026-10-21'
+  last_top: '2026-10-21'
+  price_at_add: 15617
+  itin:
+    airlines:
+    - SalamAir
+    - Oman Air
+    route: VIE→MCT→BKK
+    dep_time: '22:25'
