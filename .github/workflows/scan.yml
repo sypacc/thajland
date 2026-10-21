@@ -46,8 +46,14 @@ jobs:
       run: ${{ steps.g.outputs.run }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Špička větve, ne commit připnutý při vytvoření běhu: záložní plánovaný běh může ve frontě
+          # čekat za jiným skenem a brána musí vidět data, která ten sken právě zapsal.
+          ref: ${{ github.ref_name }}
       - id: g
         run: |
+          git fetch --quiet origin "${GITHUB_REF_NAME}" && git reset --quiet --hard "origin/${GITHUB_REF_NAME}"
+          echo "brána čte data z commitu $(git rev-parse --short HEAD)" >&2
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json, pathlib, datetime, os
           today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
