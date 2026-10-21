@@ -155,10 +155,16 @@ hledá jen pár měsíců dopředu.
 | 07:24 (+ zálohy 10:54, 14:24) | `complement.yml` – druhé měření vybraných dotazů, sloučení | běží jen nad dnešními ranními daty a jen jednou |
 | při pushi dat/webu | `publish.yml` – sestavení a nasazení dashboardu | – |
 | 12:40, 16:40 | `health.yml` – ověří dnešní sken, doplnění i shodu nasazeného webu s daty; co chybí, spustí znovu; při selhání skenu založí issue `provoz`; zavře issue s dealy starší 14 dní | – |
+| 04:20, 07:20, 12:20, 16:20 | Claude session „Thajland dispečer“ (rutina) – přes GitHub API spustí ranní sken, po 07:15 doplnění, případně publikaci; nanejvýš jednu akci za probuzení | hlásí selhané běhy |
 | 12:40 ČR | Claude rutina „Denní souhrn letenek“ – přečte publikovaná data, zkusí dohnat chybějící běhy a pošle push souhrn (hlášení, Qatar, prémiové, sledované) | souhrn řekne, co chybí |
 
-GitHub plánované běhy chodí se zpožděním i o hodiny (19.–20. 10. o ~5 h), proto zálohy a brány. Rutina
-„Doplňkový sken letenek“ v Claude zůstává vypnutá: Google z cloudu Claude blokuje dotazy (429/captcha).
+**Proč je primární spouštěč mimo GitHub.** GitHub doručuje `schedule` události tohoto repozitáře se zpožděním
+4–5,5 hodiny (20. 10.: cron 04:17 → běh 09:24, cron 07:24 → 12:47, cron 12:40 → 17:30; 21. 10. do 09:00 nic).
+Není to chyba konfigurace (běhy jsou připsané správnému uživateli, stav GitHubu „operational“), je to známé
+chování plánovače u repozitářů s vyšším využitím Actions. Proto skeny spouští **Claude session „Thajland dispečer“**
+(trvalá session s přístupem k repu, budí ji rutina ve 04:20, 07:20, 12:20 a 16:20 UTC) přes `workflow_dispatch`,
+který GitHub vykoná okamžitě. GitHub cron zůstává jen jako záloha; opožděné běhy brána ve workflow přeskočí.
+Rutina „Doplňkový sken letenek“ v Claude zůstává vypnutá: Google z cloudu Claude blokuje dotazy (429/captcha).
 
 ## Lokální spuštění
 
