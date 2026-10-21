@@ -147,49 +147,62 @@ watch:
   destination: BKK
   depart_date: '2027-08-23'
   return_date: '2027-09-13'
-  auto: true
-  added: '2026-10-21'
-  last_top: '2026-10-21'
-  price_at_add: 14836
   itin:
     airlines:
     - Qatar Airways
     route: PRG→DOH→BKK
     dep_time: '10:00'
+  added: '2026-10-21'
+  auto: true
+  last_top: '2026-10-21'
+  price_at_add: 14836
 - origin: VIE
   destination: HKT
   depart_date: '2027-08-26'
   return_date: '2027-09-16'
-  auto: true
-  added: '2026-10-21'
-  last_top: '2026-10-21'
-  price_at_add: 16808
   itin:
     airlines:
     - Qatar Airways
     route: VIE→DOH→HKT
     dep_time: 09:55
+  added: '2026-10-21'
+  auto: true
+  last_top: '2026-10-21'
+  price_at_add: 16808
 - origin: VIE
   destination: BKK
   depart_date: '2027-09-02'
   return_date: '2027-09-16'
-  auto: true
-  added: '2026-10-21'
-  last_top: '2026-10-21'
-  price_at_add: 13187
   itin:
     airlines:
     - Saudia
     route: VIE→JED→BKK
     dep_time: '15:45'
+  added: '2026-10-21'
+  auto: true
+  last_top: '2026-10-21'
+  price_at_add: 13187
 - origin: VIE
   destination: HKT
   depart_date: '2027-08-24'
   return_date: '2027-09-10'
+  itin:
+    airlines:
+    - Scoot
+    route: VIE→SIN→HKT
+    dep_time: '12:10'
+  added: '2026-10-21'
+  auto: true
+  last_top: '2026-10-21'
+  price_at_add: 13490
+- origin: VIE
+  destination: HKT
+  depart_date: '2027-08-17'
+  return_date: '2027-09-08'
   auto: true
   added: '2026-10-21'
   last_top: '2026-10-21'
-  price_at_add: 13490
+  price_at_add: 13496
   itin:
     airlines:
     - Scoot
