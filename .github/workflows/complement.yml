@@ -40,6 +40,10 @@ jobs:
     timeout-minutes: 80
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Špička větve, ne commit připnutý při vytvoření běhu: plánovaný běh může ve frontě čekat
+          # za plným skenem a brána níže musí vidět data, která ten sken právě zapsal.
+          ref: ${{ github.ref_name }}
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -52,6 +56,9 @@ jobs:
       - name: Má dnes běžet?
         id: gate
         run: |
+          # Aktuální špička větve i po instalaci závislostí (mezitím mohl doběhnout jiný běh a zapsat data).
+          git fetch --quiet origin "${GITHUB_REF_NAME}" && git reset --quiet --hard "origin/${GITHUB_REF_NAME}"
+          echo "brána čte data z commitu $(git rev-parse --short HEAD)" >&2
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json, pathlib, datetime, os
           today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
