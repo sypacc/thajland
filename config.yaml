@@ -10,8 +10,10 @@ trip:
   depart_from: "2027-08-01"
   depart_to: "2027-09-30"
   depart_step_days: 1
-  # Délka pobytu ve dnech (odlet -> návrat). "2 týdny" = 13–15 dní.
-  trip_lengths: [13, 14, 15]
+  # Délka pobytu ve dnech (odlet -> návrat). "2 týdny" = 13–15 dní, "2,5–3 týdny" = 17–22 dní.
+  # Cena u většiny aerolinek na délce pobytu skoro nezávisí, rozhodují dny odletu a návratu; delší délky
+  # hlavně otevřou levnější návraty ve druhé polovině září.
+  trip_lengths: [13, 14, 15, 17, 18, 19, 20, 21, 22]
   # Dotaz běží pro 1 dospělého (cena za osobu). Kolik vás letí – jen pro zobrazení celkové ceny.
   travelers: 2
   cabin: economy

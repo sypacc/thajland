@@ -87,7 +87,7 @@ export function insights(M) {
     const per = {}; for (const [k, v] of Object.entries(m)) { const n = k.split("|")[0]; (per[n] ||= []).push(v); }
     const meds = Object.entries(per).map(([n, v]) => [n, median(v)]).sort((x, y) => x[1] - y[1]);
     if (meds.length >= 2 && meds[meds.length - 1][1] - meds[0][1] > 400) out.push(`Délka pobytu <strong>${meds[0][0]} dní</strong> vychází nejlevněji (medián ${czk(meds[0][1])}), ${meds[meds.length - 1][0]} dní ${czk(meds[meds.length - 1][1])}.`);
-    else if (meds.length >= 2) out.push("Délka pobytu 13/14/15 dní cenu prakticky nemění, vyber podle dovolené.");
+    else if (meds.length >= 2) out.push(`Délka pobytu (${cfg.trip_lengths.join("/")} dní) cenu prakticky nemění, vyber podle dovolené.`);
   }
   if (M.pref && M.pref.overall) {
     const P = M.pref, o = P.overall; const months = Object.entries(P.byMonth).sort().map(([m, x]) => `${MONTHS[+m]} od <strong>${czk(x.price)}</strong>`).join(", ");
