@@ -166,6 +166,18 @@ chování plánovače u repozitářů s vyšším využitím Actions. Proto sken
 který GitHub vykoná okamžitě. GitHub cron zůstává jen jako záloha; opožděné běhy brána ve workflow přeskočí.
 Rutina „Doplňkový sken letenek“ v Claude zůstává vypnutá: Google z cloudu Claude blokuje dotazy (429/captcha).
 
+**Brány čtou aktuální špičku větve, ne commit připnutý při vytvoření běhu.** GitHub každému běhu připne commit
+platný v okamžiku, kdy běh vznikl, a `actions/checkout` ho standardně vezme. Běhy `scan.yml`, `complement.yml`
+a `health.yml` sdílejí frontu (`concurrency: scan`), takže plánovaný běh často čeká na doběhnutí jiného a pak by
+rozhodoval nad zastaralým `data/latest.json`. Přesně to se stalo 21. 10.: ruční plný sken ve 12:04 přepsal data bez
+bloku `complement`, zatímco plánované doplnění z 12:59 vidělo připnutý starší commit s dnešním `complement.at`,
+brána ho označila za hotové a přeskočila. Proto brány všech tří workflow (krok „Má dnes běžet?“ ve `scan.yml`
+a `complement.yml`, krok „Stav dat a běhů“ v `health.yml`) dělají checkout větve (`ref: github.ref_name`) a před
+čtením dat ještě `git fetch` + `git reset --hard origin/<větev>`; do logu vypíší „brána čte data z commitu …“.
+Joby skenu a finalizace ve `scan.yml` zůstávají na připnutém commitu, aby všechny trasy běžely nad stejnou verzí kódu.
+Ruční plný sken (`workflow_dispatch`) bránu obchází vždy a vytvoří `latest.json` od nuly, tedy i bez dnešního
+bloku `complement`; další plánované doplnění ho pak díky čerstvým datům doplní znovu.
+
 ## Lokální spuštění
 
 ```bash
