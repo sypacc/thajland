@@ -25,9 +25,15 @@ jobs:
       BRANCH: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Špička větve, ne commit připnutý při vytvoření běhu: hlídač musí rozhodovat nad daty,
+          # která právě zapsal sken nebo doplnění, jinak by je spustil znovu.
+          ref: ${{ github.ref_name }}
       - name: Stav dat a běhů
         id: st
         run: |
+          git fetch --quiet origin "${BRANCH}" && git reset --quiet --hard "origin/${BRANCH}"
+          echo "kontrola čte data z commitu $(git rev-parse --short HEAD)" >&2
           python - <<'PY'
           import json, os, subprocess, datetime, urllib.request
           today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
