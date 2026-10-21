@@ -110,7 +110,10 @@ def detect(payload: dict[str, Any], history: list[dict[str, Any]], cfg: dict[str
         # jiné aerolinky ve stejném termínu
         prefix = "watch|" if kind.startswith("watch_") else ("pref|" if kind.startswith(("pref_", "peer_")) else "")
         key = prefix + _qkey(o)
-        if prefix:
+        plain = _qkey(o)
+        if prefix == "pref|" and plain in best_by_q and best_by_q[plain].get("id") == o.get("id"):
+            key = plain   # tatáž nabídka už má běžné hlášení: důvod přidat k němu, ne zakládat duplikát
+        elif prefix:
             best_by_q.setdefault(key, o)
         reasons.setdefault(key, []).append((kind, reason, severity, extra))
 

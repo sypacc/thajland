@@ -97,7 +97,8 @@ export function insights(M) {
   }
   if (M.pref && M.pref.peers.length) {
     const P = M.pref; const have = P.peers.filter((p) => p.best); const miss = P.peers.filter((p) => !p.best).map((p) => p.name);
-    if (have.length) out.splice(1, 0, `<strong>Prémiové aerolinky:</strong> ${have.sort((a, b) => a.best.price - b.best.price).map((p) => `${p.name} od <strong>${czk(p.best.price)}</strong> (${routeName(p.best._rk)}, ${dshort(p.best.depart_date)}${p.prevMin != null && p.best.price < p.prevMin ? ", nové minimum" : ""})`).join(" · ")}${miss.length ? ` · bez nabídky: ${miss.join(", ")}` : ""}${P.cfg.peer_target_price ? ` · hlášení pod ${czk(P.cfg.peer_target_price)} nebo při pádu o ${P.cfg.peer_drop_pct || 20} % pod dosavadní minimum.` : "."}`);
+    const mir = (p) => { const ms = Object.entries(p.miracles || {}); return ms.length ? ` <strong>ZÁZRAČNÁ SLEVA −${Math.max(...ms.map(([, m]) => m.drop_pct))} %</strong> proti dosavadnímu minimu` : ""; };
+    if (have.length) out.splice(1, 0, `<strong>Prémiové aerolinky:</strong> ${have.sort((a, b) => a.best.price - b.best.price).map((p) => `${p.name} od <strong>${czk(p.best.price)}</strong> (${routeName(p.best._rk)}, ${dshort(p.best.depart_date)}${p.prevMin != null && p.best.price < p.prevMin ? ", nové minimum" : ""})${mir(p)}`).join(" · ")}${miss.length ? ` · bez nabídky: ${miss.join(", ")}` : ""}${P.cfg.peer_target_price ? ` · hlášení pod ${czk(P.cfg.peer_target_price)} nebo při pádu o ${P.cfg.peer_drop_pct || 20} % pod dosavadní minimum.` : "."}`);
   }
   const direct = fresh.filter((o) => o.stops === 0);
   if (direct.length) out.push(`Přímý let existuje od <strong>${czk(Math.min(...direct.map((o) => o.price)))}</strong> (${[...new Set(direct.map((o) => o.airlines.join("/")))].join(", ")}).`);

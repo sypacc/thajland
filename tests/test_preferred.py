@@ -86,3 +86,11 @@ def test_pref_alert_sticks_to_preferred_offer_not_cheaper_rival():
     out = alerts.detect({"day": "2026-10-20", "offers": offers, "preferred": pref, "watch": []}, [], {"target_price": 10000, "max_per_run": 8}, [])
     low = [a for a in out if "pref_low" in a["kinds"]]
     assert len(low) == 1 and low[0]["airlines"] == ["Qatar Airways"] and low[0]["price"] == 17000
+
+
+def test_peer_miracle_merges_into_regular_alert_of_same_offer():
+    # Etihad spadl o 23 %: běžné hlášení (pod cílovou cenou) i zázračná sleva se týkají téže nabídky -> jedno hlášení s oběma důvody
+    offers = [_o("PRG", "BKK", "2027-08-22", "2027-09-05", 14522, ["Etihad"], id_="et")]
+    pref = preferred.summary(offers, PREF2 | {"peers": ["Etihad"]}, {"airlines_min": {"Etihad": {"PRG-BKK": {"price": 18908}}}})
+    out = alerts.detect({"day": "2026-10-21", "offers": offers, "preferred": pref, "watch": []}, [], {"target_price": 15000, "max_per_run": 8}, [])
+    assert len(out) == 1 and set(out[0]["kinds"]) == {"target", "peer_miracle"}
