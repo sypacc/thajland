@@ -16,7 +16,8 @@ a dashboard, který ukazuje nejlepší příležitosti podle **poměru cena/výk
    „dotaz je pro vyhledávací server příliš rozsáhlý“ (ověřeno v běhu), zapnout jde v `config.yaml` → `scan.sources`.
 3. Každou nabídku **ohodnotí skóre = efektivní cena v Kč**: cena + penalizace za čas nad 14 h,
    za 2. a další přestup, za dlouhé (>5 h) či rizikově krátké (<1 h) přestupy ± korekce za aerolinku,
-   přímý let má bonus. Váhy jsou v `config.yaml` → sekce `scoring`.
+   přímý let má bonus a každý den pobytu nad 13 skóre sníží (cena na délce skoro nezávisí, chceme co nejlevněji,
+   co nejkvalitněji a na co nejdéle). Váhy jsou v `config.yaml` → sekce `scoring`.
 4. Výsledky uloží do `data/` (poslední sken + denní historie + série pro grafy) a commitne je.
 5. **Dashboard** (React + Vite ve složce `web/`, publikovaný na GitHub Pages) v pořadí podle důležitosti:
    **Verdikt** (kupovat / férová cena / počkat, po trasách, s cenou pro N osob a pokrytím termínů) →

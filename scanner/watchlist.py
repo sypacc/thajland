@@ -201,9 +201,10 @@ def auto_select(offers: list[dict[str, Any]], n: int, per_route: int = 2,
     """Top N čerstvých nabídek podle skóre, pestré: jiný itinerář (aerolinky+trasa) a max. `per_route` na trasu.
 
     Bez toho by se vybral pětkrát tentýž let v sousedních dnech. Preferovaná aerolinka (config `preferred`)
-    má rezervovaná místa: nejlevnější její let na každou destinaci jde do výběru vždy, i kdyby skóre nestačilo.
+    má rezervovaná místa: její nejlepší let (podle skóre = cena + kvalita + délka pobytu) na každou destinaci
+    jde do výběru vždy, i kdyby celkově na ostatní nestačil.
     S `tips_rated_only` jdou do tipů jen nabídky aerolinek s bonusem ve scoring.airline_adjust_czk (žádné
-    levné nízkonákladové), a `peer_reserve_tips` míst dostanou nejlevnější lety prémiové skupiny (`peers`),
+    levné nízkonákladové), a `peer_reserve_tips` míst dostanou nejlepší lety prémiové skupiny (`peers`) podle skóre,
     každá aerolinka nejvýš jedno.
     """
     pref = preferred or {}
@@ -226,9 +227,9 @@ def auto_select(offers: list[dict[str, Any]], n: int, per_route: int = 2,
         for o in fresh:
             if o.get("airlines") and all(a in pref_air for a in o["airlines"]):
                 d = o["destination"]
-                if d not in by_dest or o["price"] < by_dest[d]["price"]:
+                if d not in by_dest or o["score"] < by_dest[d]["score"]:
                     by_dest[d] = o
-        for o in sorted(by_dest.values(), key=lambda x: x["price"])[:reserve]:
+        for o in sorted(by_dest.values(), key=lambda x: x["score"])[:reserve]:
             _take(o)
     peer_reserve = int(pref.get("peer_reserve_tips") or 0)
     peers = [str(a) for a in (pref.get("peers") or [])]
@@ -237,9 +238,9 @@ def auto_select(offers: list[dict[str, Any]], n: int, per_route: int = 2,
         for o in fresh:
             al = o.get("airlines") or []
             for peer in peers:
-                if al and all(a == peer for a in al) and (peer not in by_peer or o["price"] < by_peer[peer]["price"]):
+                if al and all(a == peer for a in al) and (peer not in by_peer or o["score"] < by_peer[peer]["score"]):
                     by_peer[peer] = o
-        for o in sorted(by_peer.values(), key=lambda x: x["price"])[:peer_reserve]:
+        for o in sorted(by_peer.values(), key=lambda x: x["score"])[:peer_reserve]:
             if o not in picked and len(picked) < n:
                 _take(o)
     for o in fresh:

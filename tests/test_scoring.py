@@ -33,6 +33,17 @@ def test_score_components():
     assert o.score == 20000 + 500 + 600 - 1200
 
 
+def test_longer_stay_bonus():
+    cfg = dict(CFG, stay_baseline_days=13, czk_per_extra_stay_day=300)
+    short = _offer(15000); short.nights = 13
+    long = _offer(15000); long.nights = 22
+    score_offer(short, cfg); score_offer(long, cfg)
+    assert "stay" not in short.score_breakdown
+    assert long.score_breakdown["stay"] == -2700 and long.score == short.score - 2700
+    # bez nastavení se délka neuplatní
+    assert "stay" not in score_offer(_offer(15000), CFG).score_breakdown
+
+
 def test_direct_bonus_and_extra_stops():
     direct = score_offer(_offer(25000, stops=0, duration=700, layovers=()), CFG)
     assert direct.score_breakdown["stops"] == -1500

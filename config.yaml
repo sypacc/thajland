@@ -62,6 +62,11 @@ scoring:
   # Krátké přestupy pod touto hranicí (min) = riziko nestihnutí.
   layover_risky_min: 60
   czk_risky_layover: 800
+  # Délka pobytu: chceme co nejlevněji, co nejkvalitněji a na co nejdéle. Cena na délce skoro nezávisí, proto
+  # každý den nad stay_baseline_days skóre sníží o czk_per_extra_stay_day (22 dní vs 13 = −2 700 Kč):
+  # při podobné ceně a aerolince vyhraje delší termín (např. Etihad ~14 000 Kč na 22 dní).
+  stay_baseline_days: 13
+  czk_per_extra_stay_day: 300
   # Aerolinky: kladné = horší (připočte se), záporné = lepší (odečte se).
   airline_adjust_czk:
     "Emirates": -1200

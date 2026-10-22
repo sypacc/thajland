@@ -100,5 +100,6 @@ export function scoreWhy(o) {
   if (b.stops < 0) parts.push("bonus za přímý let"); if (b.stops > 0) parts.push(`+${czk(b.stops)} za přestupy navíc`);
   if (b.duration > 0) parts.push(`+${czk(b.duration)} za čas nad 14 h`); if (b.layover > 0) parts.push(`+${czk(b.layover)} za přestupy`);
   if (b.airline < 0) parts.push(`−${czk(-b.airline)} bonus aerolinka`); if (b.airline > 0) parts.push(`+${czk(b.airline)} malus aerolinka`);
+  if (b.stay < 0) parts.push(`−${czk(-b.stay)} za delší pobyt`);
   return `Skóre ${czk(o.score)}: cena ${czk(o.price)}${parts.length ? " · " + parts.join(" · ") : " · bez penalizací"}`;
 }

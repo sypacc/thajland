@@ -54,6 +54,12 @@ def score_offer(o: Offer, cfg: dict[str, Any]) -> Offer:
     if air:
         b["airline"] = air
 
+    # délka pobytu: chceme co nejdéle – každý den nad stay_baseline_days skóre sníží (záporný = bonus)
+    base_days = int(cfg.get("stay_baseline_days", 0) or 0)
+    per_day = float(cfg.get("czk_per_extra_stay_day", 0) or 0)
+    if o.nights and base_days and per_day and o.nights > base_days:
+        b["stay"] = -int(round((o.nights - base_days) * per_day))
+
     o.score = int(sum(b.values()))
     o.score_breakdown = b
     return o
