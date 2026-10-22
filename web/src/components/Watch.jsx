@@ -31,7 +31,7 @@ export function DealCard({ o, i, M, label }) {
 }
 
 const TABS = [["pref", "__PREF__", "Jen lety preferované aerolinky (config.preferred), seřazené podle ceny: nejlevnější termíny, které má smysl hlídat."], ["premium", "Prémiové", "Preferovaná aerolinka plus prémiová skupina (Emirates, EVA Air, Singapore Airlines, Cathay Pacific, Etihad), seřazené podle ceny. Pro tyhle chodí hlášení o zázračné slevě."], ["best", "Nejlepší poměr", "Skóre = cena + penalizace za dlouhou cestu, přestupy a horší aerolinky. Čím nižší, tím lepší."], ["cheap", "Nejlevnější", "Čistě podle ceny za osobu, bez ohledu na délku cesty a přestupy."], ["fast", "Nejrychlejší", "Nejkratší cesta tam. Cena je druhotná."], ["direct", "Přímé / 1 přestup", "Jen přímé lety a lety s jedním přestupem, řazené podle skóre."]];
-const SORTS = [["rec", "doporučené"], ["price", "nejlevnější"], ["dur", "nejkratší cesta"], ["dep", "nejbližší odlet"], ["delta", "největší zlevnění"]];
+const SORTS = [["rec", "oblíbené, pak doporučené"], ["price", "nejlevnější"], ["dur", "nejkratší cesta"], ["dep", "nejbližší odlet"], ["delta", "největší zlevnění"]];
 
 function useChanges(items, M) {
   // co se stalo s oblíbenými od poslední návštěvy (pamatujeme si naposledy viděnou cenu)
@@ -67,7 +67,8 @@ export default function Watch({ M }) {
     const remote = [...manualByKey.values()].filter((w) => !seen.has(w.key)).map((w) => ({ ...w, favorite: true, synced: true, favKey: `${w.key}#${(w.itin && w.itin.route) || ""}`, name: "Oblíbené" }));
     return [...local, ...remote];
   }, [favs, M, manualByKey]);
-  const all = useMemo(() => [...tips, ...favorites], [tips, favorites]);
+  // napřed tvoje oblíbené, až pak další doporučené tipy skeneru
+  const all = useMemo(() => [...favorites, ...tips], [tips, favorites]);
   const changes = useChanges(all, M);
   const shown = useMemo(() => {
     let l = view === "tips" ? tips : view === "fav" ? favorites : all;
@@ -93,13 +94,13 @@ export default function Watch({ M }) {
       <div className="panel-head">
         <div>
           <h2>Sledované a oblíbené</h2>
-          <p className="intro"><strong>Tipy</strong> vybírá skener každý den sám podle poměru cena/výkon, <strong>oblíbené</strong> si ukládáš hvězdičkou, hned a bez přihlašování. U každého letu: odlet, přílet, přestup a vývoj ceny.</p>
+          <p className="intro">Napřed <strong>oblíbené</strong>, které si ukládáš hvězdičkou (hned a bez přihlašování), pod nimi <strong>další doporučené</strong> – tipy, které skener každý den sám vybírá podle poměru cena/výkon. U každého letu: odlet, přílet, přestup a vývoj ceny.</p>
         </div>
         <div className="fc-controls">
           <div className="seg" role="tablist">
             <button role="tab" aria-selected={view === "all"} onClick={() => setView("all")}>Vše <span className="cnt">{all.length}</span></button>
-            <button role="tab" aria-selected={view === "tips"} onClick={() => setView("tips")}>Tipy <span className="cnt">{tips.length}</span></button>
             <button role="tab" aria-selected={view === "fav"} onClick={() => setView("fav")}>Oblíbené <span className="cnt">{favorites.length}</span></button>
+            <button role="tab" aria-selected={view === "tips"} onClick={() => setView("tips")}>Další doporučené <span className="cnt">{tips.length}</span></button>
           </div>
           <label className="sortsel">Řadit <select value={sort} onChange={(e) => setSort(e.target.value)}>{SORTS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></label>
         </div>

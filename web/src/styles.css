@@ -418,3 +418,14 @@ details summary.muted { cursor: pointer; }
 .kpi.pref.low .value { color: var(--good); }
 .tab.pref { border: 1px solid color-mix(in oklab, var(--accent) 50%, transparent); color: var(--accent-ink); }
 .tab.pref[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Hodnocení aerolinek */
+.stars { color: var(--warn); letter-spacing: 1px; font-size: .98rem; white-space: nowrap; }
+table.airlines { font-size: .82rem; }
+table.airlines th, table.airlines td { padding: 8px 8px; }
+table.airlines td { white-space: normal; vertical-align: top; }
+table.airlines td:first-child { min-width: 150px; }
+table.airlines td strong { white-space: nowrap; }
+table.airlines td.num { font-variant-numeric: tabular-nums; }
+table.airlines td strong a { color: inherit; text-decoration: underline dotted; }
+table.airlines tr.pref td { background: color-mix(in oklab, var(--fav-bg, var(--surface-2)) 55%, transparent); }

@@ -13,7 +13,7 @@ export default function Header({ M, onSettings }) {
         <a className="logo" href="#top">Thajsko <span>2027</span></a>
         <nav className="nav" aria-label="Sekce">
           <a href="#watch" className="nav-main"><Icon name="star" size={13} fill /> Sledované{favs.length ? <span className="cnt">{favs.length}</span> : null}</a>
-          <a href="#verdict">Verdikt</a><a href="#alertsPanel">Hlášení</a><a href="#calendarPanel">Kalendář</a><a href="#trend">Vývoj</a><a href="#allPanel">Vše</a><a href="#howto">Jak číst</a>
+          <a href="#verdict">Verdikt</a><a href="#alertsPanel">Hlášení</a><a href="#calendarPanel">Kalendář</a><a href="#trend">Vývoj</a><a href="#allPanel">Vše</a><a href="#airlines">Aerolinky</a><a href="#howto">Jak číst</a>
         </nav>
         <div className="tools">
           <ThemeToggle />

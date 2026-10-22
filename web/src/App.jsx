@@ -10,6 +10,7 @@ import Alerts from "./components/Alerts.jsx";
 import Calendar from "./components/Calendar.jsx";
 import Trend from "./components/Trend.jsx";
 import AllOffers from "./components/AllOffers.jsx";
+import Airlines from "./components/Airlines.jsx";
 import RunInfo from "./components/RunInfo.jsx";
 import HowTo from "./components/HowTo.jsx";
 
@@ -48,6 +49,7 @@ export default function App() {
         <Calendar M={M} />
         <Trend M={M} />
         <AllOffers M={M} />
+        <Airlines M={M} />
         <RunInfo M={M} />
         <HowTo />
       </main>
