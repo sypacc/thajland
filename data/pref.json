@@ -8,10 +8,10 @@
    "route": "PRG→DOH→BKK"
   },
   "VIE-BKK": {
-   "price": 17360,
-   "day": "2026-10-21",
-   "depart_date": "2027-08-19",
-   "return_date": "2027-09-09",
+   "price": 17356,
+   "day": "2026-10-22",
+   "depart_date": "2027-08-24",
+   "return_date": "2027-09-14",
    "route": "VIE→DOH→BKK"
   },
   "VIE-HKT": {
@@ -31,31 +31,31 @@
    "PRG-BKK": {
     "price": 17959,
     "day": "2026-10-22",
-    "depart_date": "2027-08-30",
+    "depart_date": "2027-08-29",
     "return_date": "2027-09-13",
     "route": "PRG→DXB→BKK"
    },
    "VIE-BKK": {
-    "price": 16926,
-    "day": "2026-10-21",
-    "depart_date": "2027-08-22",
-    "return_date": "2027-09-08",
+    "price": 16925,
+    "day": "2026-10-22",
+    "depart_date": "2027-08-24",
+    "return_date": "2027-09-14",
     "route": "VIE→DXB→BKK"
    },
    "VIE-HKT": {
-    "price": 18673,
-    "day": "2026-10-21",
-    "depart_date": "2027-08-22",
-    "return_date": "2027-09-08",
+    "price": 18671,
+    "day": "2026-10-22",
+    "depart_date": "2027-09-01",
+    "return_date": "2027-09-14",
     "route": "VIE→DXB→HKT"
    }
   },
   "EVA Air": {
    "VIE-BKK": {
-    "price": 19005,
-    "day": "2026-10-21",
-    "depart_date": "2027-08-24",
-    "return_date": "2027-09-10",
+    "price": 19004,
+    "day": "2026-10-22",
+    "depart_date": "2027-08-27",
+    "return_date": "2027-09-14",
     "route": "VIE→BKK"
    }
   },
