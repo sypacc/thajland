@@ -252,7 +252,7 @@ def finalize(cfg: Config, parts: list[dict[str, Any]], *, enrich: bool = True) -
     wd = watch_mod.load_watch_data()
     pref_cfg = cfg.raw.get("preferred") or {}
     pref = pref_mod.summary(offers, pref_cfg, pref_mod.load_minima())
-    watch_items = watch_mod.evaluate(wl, {"day": today, "offers": offers, "preferred": pref_cfg}, wd)
+    watch_items = watch_mod.evaluate(wl, {"day": today, "offers": offers, "preferred": pref_cfg, "scoring": cfg.scoring}, wd)
     watched_keys = {w["key"] for w in watch_items}
     for o in offers:
         o["watched"] = watch_mod.watch_key(o["origin"], o["destination"], o["depart_date"], o["return_date"]) in watched_keys

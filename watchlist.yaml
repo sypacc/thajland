@@ -7,7 +7,7 @@
 # aby se hlídala cena stejného letu, ne jen nejlevnější na termín; poznámka.
 auto:
   enabled: true
-  top: 5
+  top: 6
   keep_days: 10
 watch:
 - origin: PRG

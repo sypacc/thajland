@@ -94,3 +94,43 @@ def test_peer_miracle_merges_into_regular_alert_of_same_offer():
     pref = preferred.summary(offers, PREF2 | {"peers": ["Etihad"]}, {"airlines_min": {"Etihad": {"PRG-BKK": {"price": 18908}}}})
     out = alerts.detect({"day": "2026-10-21", "offers": offers, "preferred": pref, "watch": []}, [], {"target_price": 15000, "max_per_run": 8}, [])
     assert len(out) == 1 and set(out[0]["kinds"]) == {"target", "peer_miracle"}
+
+
+def test_auto_select_rated_only_and_peer_reserve():
+    def rated(o, adj):
+        o["score_breakdown"] = {"price": o["price"], "airline": adj}
+        return o
+    offers = [rated(_o("PRG", "BKK", "2027-08-0%d" % i, "2027-08-2%d" % i, 12000 + i, ["LOT"], score=12000 + i, route=f"PRG→WAW→BKK{i}"), 0) for i in range(1, 4)]
+    offers += [rated(_o("VIE", "HKT", "2027-08-1%d" % i, "2027-09-0%d" % i, 12500 + i, ["Scoot"], score=13300 + i, route=f"VIE→SIN→HKT{i}"), 800) for i in range(1, 4)]
+    offers += [rated(_o("PRG", "BKK", "2027-08-20", "2027-09-03", 15500, ["Qatar Airways"], score=13700, route="PRG→DOH→BKK"), -1800),
+               rated(_o("PRG", "BKK", "2027-08-25", "2027-09-08", 14000, ["Etihad"], score=13200, route="PRG→AUH→BKK"), -800),
+               rated(_o("VIE", "BKK", "2027-09-01", "2027-09-16", 16900, ["Emirates"], score=15700, route="VIE→DXB→BKK"), -1200),
+               rated(_o("VIE", "BKK", "2027-08-22", "2027-09-06", 16000, ["Turkish Airlines"], score=15400, route="VIE→IST→BKK"), -600),
+               rated(_o("VIE", "HKT", "2027-08-23", "2027-09-07", 16500, ["Austrian", "THAI"], score=16000, route="VIE→BKK→HKT"), -900)]
+    offers += [rated(_o("VIE", "BKK", "2027-08-20", "2027-09-10", 14700, ["SalamAir", "Oman Air"], score=14600, route="VIE→MCT→BKK"), -200)]
+    pref = dict(PREF, tips_rated_only=True, peer_reserve_tips=2, peers=["Emirates", "Etihad"])
+    scoring = {"airline_adjust_czk": {"Qatar Airways": -1800, "Etihad": -800, "Emirates": -1200, "Turkish Airlines": -600,
+                                      "Austrian": -300, "THAI": -600, "Oman Air": -200, "Scoot": 800}}
+    picked = watchlist.auto_select(offers, 6, per_route=2, preferred=pref, scoring=scoring)
+    airlines = [tuple(o["airlines"]) for o in picked]
+    assert ("LOT",) not in airlines and ("Scoot",) not in airlines
+    assert ("SalamAir", "Oman Air") not in airlines              # kombinace s nehodnocenou nízkonákladovou neprojde
+    assert ("Austrian", "THAI") in airlines                       # kombinace dvou hodnocených ano
+    assert airlines[0] == ("Qatar Airways",)                      # rezervované místo preferované
+    assert airlines[1:3] == [("Etihad",), ("Emirates",)]         # prémiová skupina, nejlevnější napřed
+    assert all(o["score_breakdown"]["airline"] < 0 for o in picked)
+    # bez přepínače by levné nabídky vyhrály na skóre
+    assert ("LOT",) in [tuple(o["airlines"]) for o in watchlist.auto_select(offers, 6, per_route=2, preferred=PREF)]
+
+
+def test_evaluate_drops_unrated_auto_entries():
+    scoring = {"airline_adjust_czk": {"Qatar Airways": -1800, "Scoot": 800}}
+    wl = {"auto": {"enabled": True, "top": 1, "keep_days": 10}, "watch": [
+        {"origin": "VIE", "destination": "HKT", "depart_date": "2027-08-24", "return_date": "2027-09-07", "auto": True, "added": "2026-10-20", "last_top": "2026-10-21", "itin": {"airlines": ["Scoot"]}},
+        {"origin": "PRG", "destination": "BKK", "depart_date": "2027-08-29", "return_date": "2027-09-13", "auto": True, "added": "2026-10-20", "last_top": "2026-10-21", "itin": {"airlines": ["LOT"]}},
+        {"origin": "PRG", "destination": "BKK", "depart_date": "2027-08-26", "return_date": "2027-09-09", "note": "ručně", "itin": {"airlines": ["LOT"]}},
+    ]}
+    payload = {"day": "2026-10-22", "offers": [], "preferred": dict(PREF, tips_rated_only=True), "scoring": scoring}
+    watchlist.evaluate(wl, payload, {})
+    kept = [(e.get("auto", False), e["itin"]["airlines"][0]) for e in wl["watch"]]
+    assert kept == [(False, "LOT")]   # automatické tipy bez bonusu pryč, ruční zůstal

@@ -79,6 +79,7 @@ scoring:
     "Air France": -300
     "Finnair": -200
     "Oman Air": -200
+    "Bangkok Airways": -200  # regionální navazující lety BKK→HKT ve spojení s THAI
     "Saudia": 500
     "Air China": 800
     "China Eastern": 800
@@ -86,6 +87,7 @@ scoring:
     "Hainan": 400
     "Air Arabia": 800
     "flydubai": 500
+    "SalamAir": 500          # nízkonákladová, letí v kombinaci s Oman Air
     "Wizz Air": 1000
     "Pegasus": 600
     "Aeroflot": 3000
@@ -110,6 +112,12 @@ preferred:
   target_price: 14000
   # Kolik míst v automatických tipech je rezervováno pro nejlevnější let preferované aerolinky (na každou destinaci jedno).
   reserve_tips: 2
+  # Automatické tipy nahoře na dashboardu jen z aerolinek s bonusem ve scoring.airline_adjust_czk (poměr cena/výkon),
+  # ne levné nízkonákladové (LOT, Scoot, SalamAir, Saudia…). Dřívější tipy takových aerolinek skener hned vyřadí.
+  tips_rated_only: true
+  # Kolik míst v tipech je rezervováno pro nejlevnější lety prémiové skupiny (peers níže), každá aerolinka nejvýš jedno;
+  # nejlevnější napřed (dnes typicky Etihad, pak Emirates).
+  peer_reserve_tips: 2
   # Kolik nejlevnějších termínů preferované aerolinky znovu ověřit v doplňkovém skenu (být první, kdo pokles uvidí).
   recheck_top: 8
   # „Nové minimum“ hlásit až při poklesu aspoň o tolik Kč (kurzové kolísání o pár korun není zpráva).

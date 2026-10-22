@@ -6,6 +6,23 @@ from typing import Any
 from .model import Offer
 
 
+def airline_adjust(airlines: list[str], cfg: dict[str, Any]) -> int:
+    """Bonus (záporný) / malus (kladný) za aerolinky podle `airline_adjust_czk`.
+
+    Název z configu se hledá jako podřetězec názvu aerolinky bez ohledu na velikost písmen
+    (Google píše např. „THAI“ nebo „SWISS“); každý klíč configu se započítá nejvýš jednou.
+    """
+    adjust = (cfg or {}).get("airline_adjust_czk", {}) or {}
+    air = 0
+    seen: set[str] = set()
+    for a in airlines or []:
+        for name, val in adjust.items():
+            if name.lower() in str(a).lower() and name not in seen:
+                air += int(val)
+                seen.add(name)
+    return air
+
+
 def score_offer(o: Offer, cfg: dict[str, Any]) -> Offer:
     b: dict[str, int] = {"price": int(o.price)}
 
@@ -33,14 +50,7 @@ def score_offer(o: Offer, cfg: dict[str, Any]) -> Offer:
     if lay:
         b["layover"] = lay
 
-    adjust = cfg.get("airline_adjust_czk", {}) or {}
-    air = 0
-    seen = set()
-    for a in o.airlines:
-        for name, val in adjust.items():
-            if name.lower() in a.lower() and name not in seen:
-                air += int(val)
-                seen.add(name)
+    air = airline_adjust(o.airlines, cfg)
     if air:
         b["airline"] = air
 

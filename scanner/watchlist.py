@@ -183,19 +183,44 @@ def save_watch_data(data: dict[str, Any]) -> None:
     WATCH_DATA_PATH.with_suffix(".js").write_text(f"window.THAJLAND_WATCH = {text};\n", encoding="utf-8")
 
 
+def has_airline_bonus(o: dict[str, Any], scoring: dict[str, Any] | None = None) -> bool:
+    """Každá aerolinka itineráře má v configu bonus (záporná úprava skóre) – poměr cena/výkon, ne jen cena.
+
+    Kombinace s nízkonákladovou nebo nehodnocenou aerolinkou (např. SalamAir + Oman Air) neprojde, i kdyby
+    součet bonusů vyšel záporně. Bez konfigurace skórování se použije součet z `score_breakdown`.
+    """
+    airlines = [a for a in (o.get("airlines") or []) if a]
+    if scoring is not None:
+        from .scoring import airline_adjust
+        return bool(airlines) and all(airline_adjust([a], scoring) < 0 for a in airlines)
+    return int(((o.get("score_breakdown") or {}).get("airline")) or 0) < 0
+
+
 def auto_select(offers: list[dict[str, Any]], n: int, per_route: int = 2,
-                preferred: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+                preferred: dict[str, Any] | None = None, scoring: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """Top N čerstvých nabídek podle skóre, pestré: jiný itinerář (aerolinky+trasa) a max. `per_route` na trasu.
 
     Bez toho by se vybral pětkrát tentýž let v sousedních dnech. Preferovaná aerolinka (config `preferred`)
     má rezervovaná místa: nejlevnější její let na každou destinaci jde do výběru vždy, i kdyby skóre nestačilo.
+    S `tips_rated_only` jdou do tipů jen nabídky aerolinek s bonusem ve scoring.airline_adjust_czk (žádné
+    levné nízkonákladové), a `peer_reserve_tips` míst dostanou nejlevnější lety prémiové skupiny (`peers`),
+    každá aerolinka nejvýš jedno.
     """
+    pref = preferred or {}
     fresh = sorted([o for o in offers if not o.get("stale") and o.get("score") is not None], key=lambda o: o["score"])
+    if pref.get("tips_rated_only"):
+        fresh = [o for o in fresh if has_airline_bonus(o, scoring)]
     seen_itin: set[tuple] = set()
     per: dict[tuple, int] = {}
     picked = []
-    pref_air = {str(a) for a in ((preferred or {}).get("airlines") or [])}
-    reserve = int((preferred or {}).get("reserve_tips") or 0)
+
+    def _take(o: dict[str, Any]) -> None:
+        itin = (o["origin"], o["destination"], tuple(o.get("airlines") or []), o.get("route"))
+        rk = (o["origin"], o["destination"])
+        seen_itin.add(itin); per[rk] = per.get(rk, 0) + 1; picked.append(o)
+
+    pref_air = {str(a) for a in (pref.get("airlines") or [])}
+    reserve = int(pref.get("reserve_tips") or 0)
     if pref_air and reserve > 0:
         by_dest: dict[str, dict[str, Any]] = {}
         for o in fresh:
@@ -204,9 +229,19 @@ def auto_select(offers: list[dict[str, Any]], n: int, per_route: int = 2,
                 if d not in by_dest or o["price"] < by_dest[d]["price"]:
                     by_dest[d] = o
         for o in sorted(by_dest.values(), key=lambda x: x["price"])[:reserve]:
-            itin = (o["origin"], o["destination"], tuple(o.get("airlines") or []), o.get("route"))
-            rk = (o["origin"], o["destination"])
-            seen_itin.add(itin); per[rk] = per.get(rk, 0) + 1; picked.append(o)
+            _take(o)
+    peer_reserve = int(pref.get("peer_reserve_tips") or 0)
+    peers = [str(a) for a in (pref.get("peers") or [])]
+    if peers and peer_reserve > 0:
+        by_peer: dict[str, dict[str, Any]] = {}
+        for o in fresh:
+            al = o.get("airlines") or []
+            for peer in peers:
+                if al and all(a == peer for a in al) and (peer not in by_peer or o["price"] < by_peer[peer]["price"]):
+                    by_peer[peer] = o
+        for o in sorted(by_peer.values(), key=lambda x: x["price"])[:peer_reserve]:
+            if o not in picked and len(picked) < n:
+                _take(o)
     for o in fresh:
         if len(picked) >= n:
             break
@@ -216,7 +251,7 @@ def auto_select(offers: list[dict[str, Any]], n: int, per_route: int = 2,
         rk = (o["origin"], o["destination"])
         if itin in seen_itin or per.get(rk, 0) >= per_route:
             continue
-        seen_itin.add(itin); per[rk] = per.get(rk, 0) + 1; picked.append(o)
+        _take(o)
         if len(picked) >= n:
             break
     return picked
@@ -229,8 +264,14 @@ def evaluate(watchlist: dict[str, Any], payload: dict[str, Any], watch_data: dic
     entries = [normalize_entry(w) for w in watchlist.get("watch", [])]
     entries = [e for e in entries if e]
     if auto_cfg.get("enabled", True):
+        pref = payload.get("preferred") or {}
+        scoring = payload.get("scoring")
+        if pref.get("tips_rated_only") and scoring is not None:
+            # dřívější automatické tipy aerolinek bez bonusu (levné nízkonákladové) hned vyřadit, nečekat keep_days
+            entries = [e for e in entries if not e.get("auto")
+                       or has_airline_bonus({"airlines": (e.get("itin") or {}).get("airlines") or []}, scoring)]
         keys = {watch_key(e["origin"], e["destination"], e["depart_date"], e["return_date"]) for e in entries}
-        for o in auto_select(payload.get("offers", []), int(auto_cfg.get("top", 5)), preferred=payload.get("preferred")):
+        for o in auto_select(payload.get("offers", []), int(auto_cfg.get("top", 5)), preferred=pref, scoring=scoring):
             k = watch_key(o["origin"], o["destination"], o["depart_date"], o["return_date"])
             if k in keys:
                 for e in entries:

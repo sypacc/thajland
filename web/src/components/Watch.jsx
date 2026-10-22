@@ -58,7 +58,13 @@ export default function Watch({ M }) {
   const [tab, setTab] = useState(() => (M.pref ? "pref" : "best"));
   const [hideChanges, setHideChanges] = useState(false);
   const WATCH = M.watch;
-  const tips = useMemo(() => WATCH.filter((w) => w.auto).slice(0, 8).map((w, i) => ({ ...w, rank: i + 1, favorite: false })), [WATCH]);
+  // tipy jen z aerolinek s bonusem (config preferred.tips_rated_only, výchozí zapnuto): poměr cena/výkon, ne levné
+  // nízkonákladové; každá aerolinka itineráře musí mít bonus (stejné pravidlo jako scanner/watchlist.py)
+  const ratedOnly = ((M.latest.config.preferred || {}).tips_rated_only) !== false;
+  const adjust = (M.latest.config.scoring || {}).airline_adjust_czk || {};
+  const bonusOf = (a) => Object.entries(adjust).reduce((sum, [k, v]) => (a.toLowerCase().includes(k.toLowerCase()) ? sum + +v : sum), 0);
+  const rated = (w) => { const al = ((w.current && w.current.airlines) || (w.itin && w.itin.airlines) || []).filter(Boolean); return al.length > 0 && al.every((a) => bonusOf(a) < 0); };
+  const tips = useMemo(() => WATCH.filter((w) => w.auto && (!ratedOnly || rated(w))).slice(0, 8).map((w, i) => ({ ...w, rank: i + 1, name: `Tip ${i + 1}`, favorite: false })), [WATCH, ratedOnly]); // eslint-disable-line react-hooks/exhaustive-deps
   const manualByKey = useMemo(() => new Map(WATCH.filter((w) => !w.auto).map((w) => [w.key, w])), [WATCH]);
   const favorites = useMemo(() => {
     const local = favs.map((f) => resolveFavorite(f, M, manualByKey.get(f.key)));
