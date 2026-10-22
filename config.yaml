@@ -71,7 +71,7 @@ scoring:
     "Cathay Pacific": -800
     "Etihad": -800
     "Turkish Airlines": -600
-    "Thai Airways": -600
+    "THAI": -600             # Thai Airways; Google ji píše jako „THAI“, skener hledá název jako podřetězec
     "Austrian": -300
     "Lufthansa": -300
     "Swiss": -300

@@ -5,7 +5,7 @@ import { czk, dshort, durShort, median, routeName } from "../lib/format.js";
 
 // Google někdy vrací jiný název než config (např. „THAI“ místo „Thai Airways“); skener hledá název z configu
 // jako podřetězec názvu aerolinky, tady navíc několik známých aliasů, aby hodnocení sedělo i na dashboardu.
-const ALIASES = { thai: "thai airways", swiss: "swiss" };
+const ALIASES = { "thai airways": "thai" };
 
 function adjustFor(name, adjust) {
   const low = name.toLowerCase();
@@ -72,7 +72,7 @@ export default function Airlines({ M }) {
           </tbody>
         </table>
       </div>
-      <p className="muted small">Hodnocení: 5★ prémiová (bonus od 1 000 Kč), 4★ velmi dobrá (bonus 200–800 Kč), 3★ standardní nebo bez záznamu v configu{unrated ? ` (dnes ${unrated})` : ""}, 2★ slabší (malus do 1 000 Kč), 1★ nedoporučená (malus nad 1 000 Kč). „V kombinaci“ = aerolinka letí jen část cesty s jinou. Hvězdička „*“ u názvu: Google aerolinku pojmenovává jinak než config (např. „THAI“ vs. „Thai Airways“). Přidat či změnit hodnocení = upravit <code>airline_adjust_czk</code> v <code>config.yaml</code>; projeví se v dalším skenu.</p>
+      <p className="muted small">Hodnocení: 5★ prémiová (bonus od 1 000 Kč), 4★ velmi dobrá (bonus 200–800 Kč), 3★ standardní nebo bez záznamu v configu{unrated ? ` (dnes ${unrated})` : ""}, 2★ slabší (malus do 1 000 Kč), 1★ nedoporučená (malus nad 1 000 Kč). „V kombinaci“ = aerolinka letí jen část cesty s jinou. Hvězdička „*“ u názvu: Google aerolinku pojmenovává jinak než config. Přidat či změnit hodnocení = upravit <code>airline_adjust_czk</code> v <code>config.yaml</code>; projeví se v dalším skenu.</p>
     </section>
   );
 }
