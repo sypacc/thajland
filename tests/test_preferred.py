@@ -116,6 +116,13 @@ def test_auto_select_rated_only_and_peer_reserve():
     assert ("LOT",) not in airlines and ("Scoot",) not in airlines
     assert ("SalamAir", "Oman Air") not in airlines              # kombinace s nehodnocenou nízkonákladovou neprojde
     assert ("Austrian", "THAI") in airlines                       # kombinace dvou hodnocených ano
+    # dva tipy na stejný termín (trasa + data) nejdou zapsat: Etihad se stejnými daty jako Qatar dostane jiný termín
+    offers += [rated(_o("PRG", "BKK", "2027-08-20", "2027-09-03", 14500, ["Etihad"], score=13000, route="PRG→AUH→BKK2"), -800)]
+    picked = watchlist.auto_select(offers, 6, per_route=2, preferred=pref, scoring=scoring)
+    keys = [watchlist.watch_key(o["origin"], o["destination"], o["depart_date"], o["return_date"]) for o in picked]
+    assert len(keys) == len(set(keys))
+    etihad = [o for o in picked if o["airlines"] == ["Etihad"]]
+    assert len(etihad) == 1 and etihad[0]["depart_date"] == "2027-08-25"
     assert airlines[0] == ("Qatar Airways",)                      # rezervované místo preferované
     assert airlines[1:3] == [("Etihad",), ("Emirates",)]         # prémiová skupina, nejlevnější napřed
     assert all(o["score_breakdown"]["airline"] < 0 for o in picked)

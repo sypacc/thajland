@@ -212,37 +212,46 @@ def auto_select(offers: list[dict[str, Any]], n: int, per_route: int = 2,
     if pref.get("tips_rated_only"):
         fresh = [o for o in fresh if has_airline_bonus(o, scoring)]
     seen_itin: set[tuple] = set()
+    seen_key: set[str] = set()   # sledování je na termín (trasa + data): dva tipy na stejný termín nejde zapsat
     per: dict[tuple, int] = {}
     picked = []
+
+    def _key(o: dict[str, Any]) -> str:
+        return watch_key(o["origin"], o["destination"], o["depart_date"], o["return_date"])
 
     def _take(o: dict[str, Any]) -> None:
         itin = (o["origin"], o["destination"], tuple(o.get("airlines") or []), o.get("route"))
         rk = (o["origin"], o["destination"])
-        seen_itin.add(itin); per[rk] = per.get(rk, 0) + 1; picked.append(o)
+        seen_itin.add(itin); seen_key.add(_key(o)); per[rk] = per.get(rk, 0) + 1; picked.append(o)
+
+    def _best_per(group_of) -> list[dict[str, Any]]:
+        """Nejlepší nabídka (podle skóre) pro každou skupinu, přeskakuje termíny, které už někdo obsadil."""
+        best: dict[str, dict[str, Any]] = {}
+        for o in fresh:
+            g = group_of(o)
+            if g is None or g in best or _key(o) in seen_key:
+                continue
+            best[g] = o
+        return sorted(best.values(), key=lambda x: x["score"])
 
     pref_air = {str(a) for a in (pref.get("airlines") or [])}
     reserve = int(pref.get("reserve_tips") or 0)
     if pref_air and reserve > 0:
-        by_dest: dict[str, dict[str, Any]] = {}
-        for o in fresh:
-            if o.get("airlines") and all(a in pref_air for a in o["airlines"]):
-                d = o["destination"]
-                if d not in by_dest or o["score"] < by_dest[d]["score"]:
-                    by_dest[d] = o
-        for o in sorted(by_dest.values(), key=lambda x: x["score"])[:reserve]:
+        is_pref = lambda o: o["destination"] if o.get("airlines") and all(a in pref_air for a in o["airlines"]) else None  # noqa: E731
+        for o in _best_per(is_pref)[:reserve]:
             _take(o)
     peer_reserve = int(pref.get("peer_reserve_tips") or 0)
     peers = [str(a) for a in (pref.get("peers") or [])]
     if peers and peer_reserve > 0:
-        by_peer: dict[str, dict[str, Any]] = {}
-        for o in fresh:
+        def peer_of(o: dict[str, Any]) -> str | None:
             al = o.get("airlines") or []
-            for peer in peers:
-                if al and all(a == peer for a in al) and (peer not in by_peer or o["score"] < by_peer[peer]["score"]):
-                    by_peer[peer] = o
-        for o in sorted(by_peer.values(), key=lambda x: x["score"])[:peer_reserve]:
-            if o not in picked and len(picked) < n:
-                _take(o)
+            return next((peer for peer in peers if al and all(a == peer for a in al)), None)
+        taken = 0
+        while taken < peer_reserve and len(picked) < n:
+            cands = [o for o in _best_per(peer_of) if peer_of(o) not in {peer_of(x) for x in picked}]
+            if not cands:
+                break
+            _take(cands[0]); taken += 1
     for o in fresh:
         if len(picked) >= n:
             break
@@ -250,7 +259,7 @@ def auto_select(offers: list[dict[str, Any]], n: int, per_route: int = 2,
             continue
         itin = (o["origin"], o["destination"], tuple(o.get("airlines") or []), o.get("route"))
         rk = (o["origin"], o["destination"])
-        if itin in seen_itin or per.get(rk, 0) >= per_route:
+        if itin in seen_itin or _key(o) in seen_key or per.get(rk, 0) >= per_route:
             continue
         _take(o)
         if len(picked) >= n:
