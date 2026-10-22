@@ -2,7 +2,7 @@
  "routes": {
   "PRG-BKK": {
    "price": 14836,
-   "day": "2026-10-21",
+   "day": "2026-10-22",
    "depart_date": "2027-08-23",
    "return_date": "2027-09-13",
    "route": "PRG→DOH→BKK"
@@ -25,14 +25,14 @@
  "airlines": [
   "Qatar Airways"
  ],
- "updated": "2026-10-21",
+ "updated": "2026-10-22",
  "airlines_min": {
   "Emirates": {
    "PRG-BKK": {
-    "price": 17969,
-    "day": "2026-10-21",
-    "depart_date": "2027-08-19",
-    "return_date": "2027-09-10",
+    "price": 17959,
+    "day": "2026-10-22",
+    "depart_date": "2027-08-26",
+    "return_date": "2027-09-09",
     "route": "PRG→DXB→BKK"
    },
    "VIE-BKK": {
@@ -63,16 +63,16 @@
   "Cathay Pacific": {},
   "Etihad": {
    "VIE-HKT": {
-    "price": 16066,
-    "day": "2026-10-21",
-    "depart_date": "2027-08-25",
+    "price": 16062,
+    "day": "2026-10-22",
+    "depart_date": "2027-09-01",
     "return_date": "2027-09-16",
     "route": "VIE→AUH→HKT"
    },
    "PRG-BKK": {
     "price": 14002,
-    "day": "2026-10-21",
-    "depart_date": "2027-08-31",
+    "day": "2026-10-22",
+    "depart_date": "2027-08-25",
     "return_date": "2027-09-13",
     "route": "PRG→AUH→BKK"
    },

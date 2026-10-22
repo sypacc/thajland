@@ -21,7 +21,7 @@ watch:
     dep_time: '12:45'
   added: '2026-10-19'
   auto: true
-  last_top: '2026-10-21'
+  last_top: '2026-10-22'
   price_at_add: 12525
 - origin: PRG
   destination: BKK
@@ -48,7 +48,7 @@ watch:
     dep_time: '22:25'
   added: '2026-10-19'
   auto: true
-  last_top: '2026-10-21'
+  last_top: '2026-10-22'
   price_at_add: 14792
 - origin: VIE
   destination: HKT
@@ -154,7 +154,7 @@ watch:
     dep_time: '10:00'
   added: '2026-10-21'
   auto: true
-  last_top: '2026-10-21'
+  last_top: '2026-10-22'
   price_at_add: 14836
 - origin: VIE
   destination: HKT
@@ -167,7 +167,7 @@ watch:
     dep_time: 09:55
   added: '2026-10-21'
   auto: true
-  last_top: '2026-10-21'
+  last_top: '2026-10-22'
   price_at_add: 16808
 - origin: VIE
   destination: BKK
@@ -193,18 +193,18 @@ watch:
     dep_time: '12:10'
   added: '2026-10-21'
   auto: true
-  last_top: '2026-10-21'
+  last_top: '2026-10-22'
   price_at_add: 13490
 - origin: VIE
   destination: HKT
   depart_date: '2027-08-17'
   return_date: '2027-09-08'
-  auto: true
-  added: '2026-10-21'
-  last_top: '2026-10-21'
-  price_at_add: 13496
   itin:
     airlines:
     - Scoot
     route: VIE→SIN→HKT
     dep_time: '12:10'
+  added: '2026-10-21'
+  auto: true
+  last_top: '2026-10-21'
+  price_at_add: 13496
