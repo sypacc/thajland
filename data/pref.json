@@ -31,8 +31,8 @@
    "PRG-BKK": {
     "price": 17940,
     "day": "2026-10-24",
-    "depart_date": "2027-08-26",
-    "return_date": "2027-09-10",
+    "depart_date": "2027-08-29",
+    "return_date": "2027-09-13",
     "route": "PRG→DXB→BKK"
    },
    "VIE-BKK": {
@@ -73,7 +73,7 @@
     "price": 14002,
     "day": "2026-10-24",
     "depart_date": "2027-08-26",
-    "return_date": "2027-09-17",
+    "return_date": "2027-09-15",
     "route": "PRG→AUH→BKK"
    },
    "VIE-BKK": {
