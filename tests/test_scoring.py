@@ -80,14 +80,19 @@ def test_series_and_minima(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "HISTORY_DIR", tmp_path / "history")
     q = {"origin": "PRG", "destination": "BKK", "depart_date": "2027-08-05",
          "return_date": "2027-08-19", "source": "google", "status": "ok", "count": 3,
-         "min_price": 18000, "best_score": 17500, "top": {"price": 18000}}
+         "min_price": 18000, "best_score": 17500, "top": {"price": 18000, "score": 17500, "airlines": ["Qatar Airways"]}}
     storage.save_history_snapshot("2026-10-15", [q])
-    q2 = dict(q, min_price=16500, best_score=16000)
-    storage.save_history_snapshot("2026-10-16", [q2])
+    q2 = dict(q, min_price=16500, best_score=16000, top={"price": 16500, "score": 16000, "airlines": ["Qatar Airways"]})
+    q3 = dict(q, depart_date="2027-09-03", return_date="2027-09-17", min_price=17200, best_score=17000,
+              top={"price": 17200, "score": 17000, "airlines": ["Austrian", "THAI"]})
+    storage.save_history_snapshot("2026-10-16", [q2, q3])
     hist = storage.load_history()
     assert [h["day"] for h in hist] == ["2026-10-15", "2026-10-16"]
     series = storage.build_series(hist)
     assert series["days"][1]["routes"]["PRG-BKK"]["min"] == 16500
+    # minima po aerolinkách (jen itineráře jedné aerolinky) a po měsících odletu
+    assert series["days"][1]["airlines"] == {"Qatar Airways": {"min": 16500, "best": 16000, "n": 1}}
+    assert series["days"][1]["months"] == {"08": 16500, "09": 17200}
     minima = storage.all_time_minima(hist)
     assert minima["PRG|BKK|2027-08-05|2027-08-19|google"] == {"min": 16500, "day": "2026-10-16"}
     storage.save_latest({"offers": [], "queries": [q2]})

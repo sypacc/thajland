@@ -78,6 +78,8 @@ def build_series(history: list[dict[str, Any]], query_days: int = 90) -> dict[st
     keep_from = len(history) - query_days
     for idx, snap in enumerate(history):
         per_route: dict[str, dict[str, Any]] = {}
+        per_air: dict[str, dict[str, Any]] = {}
+        per_month: dict[str, int] = {}
         per_query: list[list[Any]] = []
         for r in snap.get("records", []):
             if r.get("min") is None:
@@ -88,9 +90,23 @@ def build_series(history: list[dict[str, Any]], query_days: int = 90) -> dict[st
                 cur["min"] = r["min"]
             if r.get("best") is not None and (cur["best"] is None or r["best"] < cur["best"]):
                 cur["best"] = r["best"]
+            # denní minimum po aerolinkách (z nejlevnější nabídky každého termínu, jen itineráře jedné aerolinky)
+            # a po měsících odletu – pro report vývoje ceny na dashboardu
+            top = r.get("top") or {}
+            al = [a for a in (top.get("airlines") or []) if a]
+            if al and len(set(al)) == 1 and top.get("price") is not None:
+                a = per_air.setdefault(al[0], {"min": None, "best": None, "n": 0})
+                a["n"] += 1
+                if a["min"] is None or top["price"] < a["min"]:
+                    a["min"] = top["price"]
+                if top.get("score") is not None and (a["best"] is None or top["score"] < a["best"]):
+                    a["best"] = top["score"]
+            mk = str(r.get("dep", ""))[5:7]
+            if mk and (mk not in per_month or r["min"] < per_month[mk]):
+                per_month[mk] = r["min"]
             if idx >= keep_from:
                 per_query.append([r["o"], r["d"], r["dep"], r["ret"], r["src"], r["min"], r.get("best")])
-        days.append({"day": snap["day"], "routes": per_route, "queries": per_query})
+        days.append({"day": snap["day"], "routes": per_route, "airlines": per_air, "months": per_month, "queries": per_query})
     return {"days": days}
 
 

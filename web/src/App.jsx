@@ -4,6 +4,7 @@ import { applyTheme, getTheme, setCurrency } from "./lib/format.js";
 import Settings, { Toasts } from "./components/Settings.jsx";
 import Header from "./components/Header.jsx";
 import Verdict from "./components/Verdict.jsx";
+import Report from "./components/Report.jsx";
 import Watch from "./components/Watch.jsx";
 import Insights from "./components/Insights.jsx";
 import Alerts from "./components/Alerts.jsx";
@@ -44,6 +45,7 @@ export default function App() {
       <main className="wrap" id="top">
         <Watch M={M} />
         <Verdict M={M} />
+        <Report M={M} />
         <Insights M={M} />
         <Alerts M={M} />
         <Calendar M={M} />

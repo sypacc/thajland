@@ -18,7 +18,8 @@ a dashboard, který ukazuje nejlepší příležitosti podle **poměru cena/výk
    za 2. a další přestup, za dlouhé (>5 h) či rizikově krátké (<1 h) přestupy ± korekce za aerolinku,
    přímý let má bonus a každý den pobytu nad 13 skóre sníží (cena na délce skoro nezávisí, chceme co nejlevněji,
    co nejkvalitněji a na co nejdéle). Váhy jsou v `config.yaml` → sekce `scoring`.
-4. Výsledky uloží do `data/` (poslední sken + denní historie + série pro grafy) a commitne je.
+4. Výsledky uloží do `data/` (poslední sken + denní historie + série pro grafy: minima po trasách, aerolinkách
+   a měsících odletu, ze kterých dashboard skládá sekci „Report a výhled“) a commitne je.
 5. **Dashboard** (React + Vite ve složce `web/`, publikovaný na GitHub Pages) v pořadí podle důležitosti:
    **Verdikt** (kupovat / férová cena / počkat, po trasách, s cenou pro N osob a pokrytím termínů) →
    **Postřehy z dat** (odkud a kam je levněji, nejlevnější týden, délka pobytu, přímé lety, trend) →

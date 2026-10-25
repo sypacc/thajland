@@ -429,3 +429,24 @@ table.airlines td strong { white-space: nowrap; }
 table.airlines td.num { font-variant-numeric: tabular-nums; }
 table.airlines td strong a { color: inherit; text-decoration: underline dotted; }
 table.airlines tr.pref td { background: color-mix(in oklab, var(--fav-bg, var(--surface-2)) 55%, transparent); }
+
+/* Report a výhled */
+.report .panel-head .intro { max-width: 760px; }
+.report-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.report-cols { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(280px, 1fr); gap: 20px; align-items: start; }
+.report h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 14px 0 6px; }
+.report h3:first-child { margin-top: 0; }
+table.report-table { font-size: .84rem; }
+table.report-table th, table.report-table td { padding: 7px 8px; }
+table.report-table tr.pref td { background: color-mix(in oklab, var(--fav-bg, var(--surface-2)) 55%, transparent); }
+.report-outlook { border-radius: var(--radius); padding: 18px 20px; background: var(--surface-2); border: 1px solid var(--border); position: relative; overflow: hidden; }
+.report-outlook::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 5px; background: var(--info, var(--accent)); }
+.report-outlook.good::before { background: var(--good); } .report-outlook.warn::before { background: var(--warn); }
+.report-outlook .label { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.report-outlook .headline { font-family: var(--fd); font-size: 1.25rem; font-weight: 700; line-height: 1.2; margin: 4px 0 8px; letter-spacing: -.01em; }
+.report-outlook p { margin: 0 0 10px; font-size: .92rem; color: var(--text-2); }
+.report-outlook p strong { color: var(--text); }
+.report-outlook ul.windows { list-style: none; margin: 0 0 10px; padding: 0; }
+.report-outlook ul.windows li { padding: 7px 0; border-top: 1px solid var(--border); }
+.report-outlook ul.windows li:first-child { border-top: 0; }
+@media (max-width: 900px) { .report-cols { grid-template-columns: 1fr; } }
