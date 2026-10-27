@@ -25,14 +25,14 @@
  "airlines": [
   "Qatar Airways"
  ],
- "updated": "2026-10-26",
+ "updated": "2026-10-27",
  "airlines_min": {
   "Emirates": {
    "PRG-BKK": {
     "price": 17940,
-    "day": "2026-10-26",
-    "depart_date": "2027-08-22",
-    "return_date": "2027-09-06",
+    "day": "2026-10-27",
+    "depart_date": "2027-08-26",
+    "return_date": "2027-09-17",
     "route": "PRG→DXB→BKK"
    },
    "VIE-BKK": {
