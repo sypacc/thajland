@@ -112,7 +112,7 @@ watch:
     dep_time: 09:55
   added: '2026-10-22'
   auto: true
-  last_top: '2026-10-27'
+  last_top: '2026-10-28'
   price_at_add: 17284
 - origin: VIE
   destination: BKK
@@ -190,7 +190,7 @@ watch:
     dep_time: '11:20'
   added: '2026-10-23'
   auto: true
-  last_top: '2026-10-27'
+  last_top: '2026-10-28'
   price_at_add: 14002
 - origin: VIE
   destination: BKK
@@ -229,7 +229,7 @@ watch:
     dep_time: '22:30'
   added: '2026-10-25'
   auto: true
-  last_top: '2026-10-27'
+  last_top: '2026-10-28'
   price_at_add: 16241
 - origin: VIE
   destination: HKT
@@ -255,7 +255,7 @@ watch:
     dep_time: '22:40'
   added: '2026-10-25'
   auto: true
-  last_top: '2026-10-25'
+  last_top: '2026-10-28'
   price_at_add: 16974
 - origin: VIE
   destination: HKT
@@ -307,7 +307,7 @@ watch:
     dep_time: '11:20'
   added: '2026-10-27'
   auto: true
-  last_top: '2026-10-27'
+  last_top: '2026-10-28'
   price_at_add: 14491
 - origin: VIE
   destination: HKT
@@ -320,18 +320,18 @@ watch:
     dep_time: '11:55'
   added: '2026-10-27'
   auto: true
-  last_top: '2026-10-27'
+  last_top: '2026-10-28'
   price_at_add: 16586
 - origin: VIE
   destination: BKK
   depart_date: '2027-08-30'
   return_date: '2027-09-21'
-  auto: true
-  added: '2026-10-27'
-  last_top: '2026-10-27'
-  price_at_add: 16984
   itin:
     airlines:
     - Emirates
     route: VIE→DXB→BKK
     dep_time: '22:40'
+  added: '2026-10-27'
+  auto: true
+  last_top: '2026-10-27'
+  price_at_add: 16984
