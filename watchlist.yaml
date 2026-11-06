@@ -177,7 +177,7 @@ watch:
     dep_time: '22:30'
   added: '2026-10-26'
   auto: true
-  last_top: '2026-11-04'
+  last_top: '2026-11-06'
   price_at_add: 16642
 - origin: VIE
   destination: BKK
@@ -190,7 +190,7 @@ watch:
     dep_time: '22:40'
   added: '2026-10-26'
   auto: true
-  last_top: '2026-10-27'
+  last_top: '2026-11-06'
   price_at_add: 16986
 - origin: VIE
   destination: HKT
@@ -229,7 +229,7 @@ watch:
     dep_time: '11:55'
   added: '2026-10-27'
   auto: true
-  last_top: '2026-11-02'
+  last_top: '2026-11-06'
   price_at_add: 16586
 - origin: VIE
   destination: BKK
@@ -543,3 +543,16 @@ watch:
   auto: true
   last_top: '2026-11-05'
   price_at_add: 16230
+- origin: PRG
+  destination: BKK
+  depart_date: '2027-09-04'
+  return_date: '2027-09-26'
+  auto: true
+  added: '2026-11-06'
+  last_top: '2026-11-06'
+  price_at_add: 14494
+  itin:
+    airlines:
+    - Etihad
+    route: PRG→AUH→BKK
+    dep_time: '11:20'
