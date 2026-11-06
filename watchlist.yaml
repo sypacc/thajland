@@ -99,7 +99,7 @@ watch:
     dep_time: '11:20'
   added: '2026-10-23'
   auto: true
-  last_top: '2026-11-05'
+  last_top: '2026-11-06'
   price_at_add: 14002
 - origin: VIE
   destination: BKK
@@ -112,7 +112,7 @@ watch:
     dep_time: '22:40'
   added: '2026-10-23'
   auto: true
-  last_top: '2026-11-04'
+  last_top: '2026-11-06'
   price_at_add: 16939
 - origin: VIE
   destination: BKK
@@ -372,7 +372,7 @@ watch:
     dep_time: '22:30'
   added: '2026-10-31'
   auto: true
-  last_top: '2026-11-04'
+  last_top: '2026-11-06'
   price_at_add: 16753
 - origin: PRG
   destination: BKK
@@ -411,7 +411,7 @@ watch:
     dep_time: '22:30'
   added: '2026-11-01'
   auto: true
-  last_top: '2026-11-03'
+  last_top: '2026-11-06'
   price_at_add: 16766
 - origin: PRG
   destination: BKK
@@ -450,7 +450,7 @@ watch:
     dep_time: '11:20'
   added: '2026-11-03'
   auto: true
-  last_top: '2026-11-05'
+  last_top: '2026-11-06'
   price_at_add: 14576
 - origin: VIE
   destination: BKK
@@ -476,7 +476,7 @@ watch:
     dep_time: '22:30'
   added: '2026-11-03'
   auto: true
-  last_top: '2026-11-05'
+  last_top: '2026-11-06'
   price_at_add: 16285
 - origin: VIE
   destination: HKT
@@ -508,38 +508,38 @@ watch:
   destination: BKK
   depart_date: '2027-09-06'
   return_date: '2027-09-28'
-  auto: true
-  added: '2026-11-05'
-  last_top: '2026-11-05'
-  price_at_add: 14542
   itin:
     airlines:
     - Etihad
     route: PRG→AUH→BKK
     dep_time: '11:20'
+  added: '2026-11-05'
+  auto: true
+  last_top: '2026-11-05'
+  price_at_add: 14542
 - origin: VIE
   destination: BKK
   depart_date: '2027-09-07'
   return_date: '2027-09-29'
-  auto: true
-  added: '2026-11-05'
-  last_top: '2026-11-05'
-  price_at_add: 16942
   itin:
     airlines:
     - Emirates
     route: VIE→DXB→BKK
     dep_time: '22:40'
+  added: '2026-11-05'
+  auto: true
+  last_top: '2026-11-05'
+  price_at_add: 16942
 - origin: VIE
   destination: BKK
   depart_date: '2027-08-28'
   return_date: '2027-09-19'
-  auto: true
-  added: '2026-11-05'
-  last_top: '2026-11-05'
-  price_at_add: 16230
   itin:
     airlines:
     - Etihad
     route: VIE→AUH→BKK
     dep_time: '22:30'
+  added: '2026-11-05'
+  auto: true
+  last_top: '2026-11-05'
+  price_at_add: 16230
