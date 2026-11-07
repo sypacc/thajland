@@ -233,19 +233,6 @@ watch:
   price_at_add: 16586
 - origin: VIE
   destination: BKK
-  depart_date: '2027-08-30'
-  return_date: '2027-09-21'
-  itin:
-    airlines:
-    - Emirates
-    route: VIE→DXB→BKK
-    dep_time: '22:40'
-  added: '2026-10-27'
-  auto: true
-  last_top: '2026-10-27'
-  price_at_add: 16984
-- origin: VIE
-  destination: BKK
   depart_date: '2027-08-18'
   return_date: '2027-09-09'
   itin:
@@ -547,12 +534,90 @@ watch:
   destination: BKK
   depart_date: '2027-09-04'
   return_date: '2027-09-26'
-  auto: true
+  itin:
+    airlines:
+    - Etihad
+    route: PRG→AUH→BKK
+    dep_time: '11:20'
   added: '2026-11-06'
+  auto: true
   last_top: '2026-11-06'
+  price_at_add: 14494
+- origin: PRG
+  destination: BKK
+  depart_date: '2027-09-08'
+  return_date: '2027-09-30'
+  auto: true
+  added: '2026-11-07'
+  last_top: '2026-11-07'
+  price_at_add: 15268
+  itin:
+    airlines:
+    - Qatar Airways
+    route: PRG→DOH→BKK
+    dep_time: '10:00'
+- origin: VIE
+  destination: HKT
+  depart_date: '2027-09-07'
+  return_date: '2027-09-29'
+  auto: true
+  added: '2026-11-07'
+  last_top: '2026-11-07'
+  price_at_add: 17349
+  itin:
+    airlines:
+    - Qatar Airways
+    route: VIE→DOH→HKT
+    dep_time: 09:55
+- origin: PRG
+  destination: BKK
+  depart_date: '2027-09-05'
+  return_date: '2027-09-27'
+  auto: true
+  added: '2026-11-07'
+  last_top: '2026-11-07'
   price_at_add: 14494
   itin:
     airlines:
     - Etihad
     route: PRG→AUH→BKK
     dep_time: '11:20'
+- origin: VIE
+  destination: BKK
+  depart_date: '2027-09-01'
+  return_date: '2027-09-23'
+  auto: true
+  added: '2026-11-07'
+  last_top: '2026-11-07'
+  price_at_add: 16980
+  itin:
+    airlines:
+    - Emirates
+    route: VIE→DXB→BKK
+    dep_time: '22:40'
+- origin: VIE
+  destination: BKK
+  depart_date: '2027-09-04'
+  return_date: '2027-09-26'
+  auto: true
+  added: '2026-11-07'
+  last_top: '2026-11-07'
+  price_at_add: 16236
+  itin:
+    airlines:
+    - Etihad
+    route: VIE→AUH→BKK
+    dep_time: '22:30'
+- origin: VIE
+  destination: HKT
+  depart_date: '2027-08-29'
+  return_date: '2027-09-20'
+  auto: true
+  added: '2026-11-07'
+  last_top: '2026-11-07'
+  price_at_add: 16463
+  itin:
+    airlines:
+    - Etihad
+    route: VIE→AUH→HKT
+    dep_time: '22:30'
